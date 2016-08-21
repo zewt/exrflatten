@@ -2,5 +2,11 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClCompile Include="exrflatten.cpp" />
+    <ClCompile Include="exrsamples.cpp" />
+    <ClCompile Include="helpers.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="exrsamples.h" />
+    <ClInclude Include="helpers.h" />
   </ItemGroup>
 </Project>

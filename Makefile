@@ -3,5 +3,5 @@ LDFLAGS=-lIlmImf -g
 CC=g++
 
 all: exrflatten
-exrflatten: exrflatten.o
+exrflatten: exrflatten.o helpers.o exrsamples.o
 
