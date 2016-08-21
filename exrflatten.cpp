@@ -9,6 +9,7 @@
 #include <set>
 #include <vector>
 
+// Too fine-grained:
 #include <OpenEXR/ImfCRgbaFile.h>
 #include <OpenEXR/ImfDeepScanLineInputFile.h>
 #include <OpenEXR/ImathBox.h>
@@ -19,12 +20,14 @@
 #include <OpenEXR/ImfPreviewImage.h>
 #include <OpenEXR/ImfAttribute.h>
 #include <OpenEXR/ImfStringAttribute.h>
+#include <OpenEXR/Iex.h>
 
 #include "helpers.h"
 
 using namespace std;
 using namespace Imf;
 using namespace Imath;
+using namespace Iex;
 
 const int NO_OBJECT_ID = 0;
 
@@ -158,8 +161,10 @@ struct DeepSample
     uint32_t objectId;
 };
 
-void ReadEXR(DeepScanLineInputFile &file, Array2D<vector<DeepSample>> &samples)
+Header ReadEXR(string filename, Array2D<vector<DeepSample>> &samples)
 {
+    DeepScanLineInputFile file(filename.c_str());
+
     const Header &header = file.header();
     Box2i dataWindow = header.dataWindow();
     const int width = dataWindow.max.x - dataWindow.min.x + 1;
@@ -237,6 +242,7 @@ void ReadEXR(DeepScanLineInputFile &file, Array2D<vector<DeepSample>> &samples)
             }
         }
     }
+    return file.header();
 }
 
 // Given a list of samples on a pixel, return a list of sample indices sorted by depth, furthest
@@ -391,13 +397,23 @@ void readObjectIdNames(const Header &header, map<int,string> &objectIdNames)
     }
 }
 
-void readDeepScanlineFile(string filename, string output)
+bool readDeepScanlineFile(string filename, string output)
 {
-    DeepScanLineInputFile file(filename.c_str());
-    const Header &header = file.header();
+    Array2D<vector<DeepSample>> samples;
+    Header header;
+    try {
+        header = ReadEXR(filename, samples);
+    }
+    catch(const BaseExc &e)
+    {
+        // We don't include the filename here because OpenEXR's exceptions include the filename.
+        // (Unfortunately, the errors are also formatted awkwardly...)
+        fprintf(stderr, "%s\n", e.what());
+        return false;
+    }
 
 /*
-    const ChannelList &channels = file.header().channels();
+    const ChannelList &channels = header.channels();
     for(auto i = channels.begin(); i != channels.end(); ++i)
     {
         const Channel &channel = i.channel();
@@ -417,8 +433,6 @@ void readDeepScanlineFile(string filename, string output)
         }
     }
 */
-    Array2D<vector<DeepSample>> samples;
-    ReadEXR(file, samples);
 
     // Sort all samples by depth.  If we want to support volumes, this is where we'd do the rest
     // of "tidying", splitting samples where they overlap using splitVolumeSample.
@@ -440,13 +454,13 @@ void readDeepScanlineFile(string filename, string output)
     map<int,string> objectIdNames;
     readObjectIdNames(header, objectIdNames);
 
-    if(!objectIdNames.empty())
+/*    if(!objectIdNames.empty())
     {
         printf("Object ID names:\n");
         for(auto it: objectIdNames)
             printf("Id %i: %s\n", it.first, it.second.c_str());
         printf("\n");
-    }
+    } */
 
     // Set the layer with the object ID 0 to "default", unless a name for that ID
     // was specified explicitly.
@@ -502,19 +516,40 @@ void readDeepScanlineFile(string filename, string output)
         // It would be nice if there was an EXR attribute contained the frame number.
         outputName = subst(outputName, "<frame>", getFrameNumberFromFilename(filename));
             
+        static bool warned = false;
+        if(!warned && outputName == output)
+        {
+            // If the output filename hasn't changed, there are no substitutions in it, which
+            // means we'll write a single file over and over.  That's probably not what was
+            // wanted.
+            fprintf(stderr, "Warning: output path \"%s\" doesn't contain any substitutions, so only one file will be written.\n", outputName.c_str());
+            fprintf(stderr, "Try \"%s\" instead.\n", (outputName + "_<name>.exr").c_str());
+            warned = true;
+        }
+
         printf("Writing: %s\n", outputName.c_str());
-        layer.image->write(outputName);
+        try {
+            layer.image->write(outputName);
+        }
+        catch(const BaseExc &e)
+        {
+            fprintf(stderr, "%s\n", e.what());
+            return false;
+        }
     }
+    return true;
 }
 
 int main(int argc, char **argv)
 {
     if(argc < 3) {
-        fprintf( stderr, "Usage: exrflatten input.exr output\n" );
+        fprintf(stderr, "Usage: exrflatten input.exr output\n");
         return 1;
     }
 
-    readDeepScanlineFile(argv[1], argv[2]);
+    if(!readDeepScanlineFile(argv[1], argv[2]))
+        return 1;
+
     return 0;
 }
 

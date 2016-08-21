@@ -1,5 +1,5 @@
 CXXFLAGS=-std=c++1y -Wall   -Wno-sign-compare -O2 -g
-LDFLAGS=-lIlmImf -g
+LDFLAGS=-lIlmImf -lIex-2_2 -g
 CC=g++
 
 all: exrflatten
