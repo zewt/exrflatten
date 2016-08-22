@@ -134,7 +134,7 @@ public:
         }
     }
 
-    void write(string filename) const
+    void WriteEXR(string filename) const
     {
         Header headerCopy(header);
         headerCopy.channels().insert("R", Channel(FLOAT));
@@ -529,7 +529,7 @@ bool readDeepScanlineFile(string filename, string output)
 
         printf("Writing: %s\n", outputName.c_str());
         try {
-            layer.image->write(outputName);
+            layer.image->WriteEXR(outputName);
         }
         catch(const BaseExc &e)
         {
