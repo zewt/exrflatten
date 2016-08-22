@@ -19,6 +19,11 @@ for each file that can be edited separately and blended together.  The only tric
 is that the layers are blended together with additive blending rather than normal
 blending.
 
+Download
+--------
+
+2016-08-22-1: [Windows](https://s3.amazonaws.com/exrflatten/exrflatten-2016-08-22-1.zip)
+
 Instructions
 ------------
 
