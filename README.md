@@ -5,6 +5,11 @@ edge antialiasing, to avoid the artifacts caused by masks.
 - Allow it to be done using simple tools like Photoshop, instead of heavy compositing
 packages like Nuke.
 
+The red helix is a single layer even where it goes underneath the cylinder, and
+color and exposure changes have been made to it with ordinary Photoshop tools:
+
+![](sample/sample_flat.png)
+
 This works with image editing software without additional plugins, and requires no
 extra renderer support beyond standard deep EXR rendering and object IDs.  This
 idea is based on <https://github.com/MercenariesEngineering/openexrid>.
@@ -38,6 +43,31 @@ combine correctly.
 
 The image should now look like the original render, and you can make color adjustments
 to individual object layers.
+
+Object names
+------------
+
+By default, output files will be named by object ID, so <name> will be replaced with a
+number.  To name objects, add an EXR string attribute named "ObjectId/<id>" for each ID,
+with the name as the value.  See sample/sample.exr for an example.
+
+Sample
+------
+
+See sample/sample.psd shows how this can be used.  This sample applies several color
+adjustments to a red helix: changing its color with a hue shift, adjusting its exposure
+and applying a photo filter.  Each adjustment only affects the red helix, blending with
+the green helix and blue cylinder that its transparency interacts with.
+
+The source scene ``sample.ma`` can be rendered with Maya 2017 using Arnold, which
+will output sample.exr.  To generate the flattened images, run:
+
+```
+exrflatten sample.exr sample_'<name>'.exr
+```
+
+The PSD is linked to these files, and will update automatically.  (If Photoshop doesn't
+connect the linked images correctly, you may need to re-link them the first time.)
 
 Limitations
 -----------
