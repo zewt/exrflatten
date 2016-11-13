@@ -397,6 +397,27 @@ void readObjectIdNames(const Header &header, map<int,string> &objectIdNames)
     }
 }
 
+void CopyLayerAttributes(const Header &input, Header &output)
+{
+    for(auto it = input.begin(); it != input.end(); ++it)
+    {
+        auto &attr = it.attribute();
+        string headerName = it.name();
+        if(headerName == "channels" ||
+            headerName == "chunkCount" ||
+            headerName == "compression" ||
+            headerName == "lineOrder" ||
+            headerName == "type" ||
+            headerName == "version")
+            continue;
+
+        if(headerName.substr(0, 9) == "ObjectId/")
+            continue;
+
+        output.insert(headerName, attr);
+    }
+}
+
 bool readDeepScanlineFile(string filename, string output)
 {
     Array2D<vector<DeepSample>> samples;
@@ -473,23 +494,7 @@ bool readDeepScanlineFile(string filename, string output)
         auto &layer = layers[i];
 
         // Copy all image attributes, except for built-in EXR headers that we shouldn't set.
-        for(auto it = header.begin(); it != header.end(); ++it)
-        {
-            auto &attr = it.attribute();
-            string headerName = it.name();
-            if(headerName == "channels" ||
-                headerName == "chunkCount" ||
-                headerName == "compression" ||
-                headerName == "lineOrder" ||
-                headerName == "type" ||
-                headerName == "version")
-                continue;
-
-            if(headerName.substr(0, 9) == "ObjectId/")
-                continue;
-
-            layer.image->header.insert(headerName, attr);
-        }
+        CopyLayerAttributes(header, layer.image->header);
 
         // Do simple substitutions on the output filename.
         string outputName = output;
