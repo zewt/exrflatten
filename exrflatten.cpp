@@ -418,12 +418,66 @@ void CopyLayerAttributes(const Header &input, Header &output)
     }
 }
 
-bool readDeepScanlineFile(string filename, string output)
+class FlattenFiles
+{
+public:
+    FlattenFiles(string inputFilename);
+    bool flatten(string output);
+
+private:
+    string MakeOutputFilename(string output, const Layer &layer, string name);
+
+    string inputFilename;
+    map<int,OutputFilenames> objectIdNames;
+};
+
+FlattenFiles::FlattenFiles(string inputFilename_)
+{
+    inputFilename = inputFilename_;
+}
+
+// Do simple substitutions on the output filename.
+string FlattenFiles::MakeOutputFilename(string output, const Layer &layer, string name)
+{
+    string outputName = output;
+
+    // <name>: the name of the object ID that we got from the EXR file, or "#100" if we
+    // only have a number.
+    outputName = subst(outputName, "<name>", name);
+
+    // <layer>: the output layer that we generated.  This is currently always "color".
+    outputName = subst(outputName, "<layer>", layer.name);
+
+    // <inputname>: the input filename, with the directory and ".exr" removed.
+    string inputName = inputFilename;
+    inputName = basename(inputName);
+    inputName = setExtension(inputName, "");
+    outputName = subst(outputName, "<inputname>", inputName);
+
+    // <frame>: the input filename's frame number, given a "abcdef.1234.exr" filename.
+    // It would be nice if there was an EXR attribute contained the frame number.
+    outputName = subst(outputName, "<frame>", getFrameNumberFromFilename(inputFilename));
+
+    static bool warned = false;
+    if(!warned && outputName == output)
+    {
+        // If the output filename hasn't changed, there are no substitutions in it, which
+        // means we'll write a single file over and over.  That's probably not what was
+        // wanted.
+        fprintf(stderr, "Warning: output path \"%s\" doesn't contain any substitutions, so only one file will be written.\n", outputName.c_str());
+        fprintf(stderr, "Try \"%s\" instead.\n", (outputName + "_<name>.exr").c_str());
+        warned = true;
+    }
+
+    return outputName;
+}
+
+bool FlattenFiles::flatten(string output)
 {
     Array2D<vector<DeepSample>> samples;
     Header header;
     try {
-        header = ReadEXR(filename, samples);
+        header = ReadEXR(inputFilename, samples);
     }
     catch(const BaseExc &e)
     {
@@ -472,7 +526,6 @@ bool readDeepScanlineFile(string filename, string output)
     SeparateIntoAdditiveLayers(layers, samples);
 
     // If this file has names for object IDs, read them.
-    map<int,string> objectIdNames;
     readObjectIdNames(header, objectIdNames);
 
 /*    if(!objectIdNames.empty())
@@ -496,41 +549,13 @@ bool readDeepScanlineFile(string filename, string output)
         // Copy all image attributes, except for built-in EXR headers that we shouldn't set.
         CopyLayerAttributes(header, layer.image->header);
 
-        // Do simple substitutions on the output filename.
-        string outputName = output;
         string objectIdName;
         if(objectIdNames.find(layer.objectId) != objectIdNames.end())
             objectIdName = objectIdNames.at(layer.objectId);
         else
             objectIdName = ssprintf("#%i", layer.objectId);
 
-        // <name>: the name of the object ID that we got from the EXR file, or "#100" if we
-        // only have a number.
-        outputName = subst(outputName, "<name>", objectIdName);
-
-        // <layer>: the output layer that we generated.  This is currently always "color".
-        outputName = subst(outputName, "<layer>", layer.name);
-
-        // <inputname>: the input filename, with the directory and ".exr" removed.
-        string inputName = filename;
-        inputName = basename(inputName);
-        inputName = setExtension(inputName, "");
-        outputName = subst(outputName, "<inputname>", inputName);
-
-        // <frame>: the input filename's frame number, given a "abcdef.1234.exr" filename.
-        // It would be nice if there was an EXR attribute contained the frame number.
-        outputName = subst(outputName, "<frame>", getFrameNumberFromFilename(filename));
-            
-        static bool warned = false;
-        if(!warned && outputName == output)
-        {
-            // If the output filename hasn't changed, there are no substitutions in it, which
-            // means we'll write a single file over and over.  That's probably not what was
-            // wanted.
-            fprintf(stderr, "Warning: output path \"%s\" doesn't contain any substitutions, so only one file will be written.\n", outputName.c_str());
-            fprintf(stderr, "Try \"%s\" instead.\n", (outputName + "_<name>.exr").c_str());
-            warned = true;
-        }
+        string outputName = MakeOutputFilename(output, layer, objectIdName);
 
         printf("Writing: %s\n", outputName.c_str());
         try {
@@ -552,7 +577,8 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if(!readDeepScanlineFile(argv[1], argv[2]))
+    FlattenFiles flatten(argv[1]);
+    if(!flatten.flatten(argv[2]))
         return 1;
 
     return 0;
