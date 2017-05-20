@@ -8,6 +8,7 @@
 #include <memory>
 #include <set>
 #include <vector>
+#include <unordered_map>
 
 // Too fine-grained:
 #include <OpenEXR/ImfCRgbaFile.h>
@@ -106,6 +107,7 @@ class SimpleImage
 public:
     struct pixel {
         float rgba[4];
+        float mask = 0;
     };
     vector<pixel> data;
     int width, height;
@@ -134,8 +136,26 @@ public:
         }
     }
 
+    /*
+    void ApplyMask()
+    {
+        for(int y = 0; y < height; y++)
+        {
+            for(int x = 0; x < width; x++)
+            {
+                const int pixelIdx = x + y*width;
+                data[pixelIdx].rgba[0] *= data[pixelIdx].mask;
+                data[pixelIdx].rgba[1] *= data[pixelIdx].mask;
+                data[pixelIdx].rgba[2] *= data[pixelIdx].mask;
+                data[pixelIdx].rgba[3] *= data[pixelIdx].mask;
+            }
+        }
+    }
+    */
     void WriteEXR(string filename) const
     {
+        printf("Writing: %s\n", filename.c_str());
+
         Header headerCopy(header);
         headerCopy.channels().insert("R", Channel(FLOAT));
         headerCopy.channels().insert("G", Channel(FLOAT));
@@ -158,6 +178,7 @@ struct DeepSample
 {
     float rgba[4];
     float zNear, zFar;
+    float mask;
     uint32_t objectId;
 };
 
@@ -202,6 +223,9 @@ Header ReadEXR(string filename, Array2D<vector<DeepSample>> &samples)
     FBArray<float> dataZB;
     dataZB.AddArrayToFramebuffer("ZBack", FLOAT, header, frameBuffer);
 
+    FBArray<float> dataMask;
+    dataMask.AddArrayToFramebuffer("mask", FLOAT, header, frameBuffer);
+
     file.setFrameBuffer(frameBuffer);
     file.readPixelSampleCounts(dataWindow.min.y, dataWindow.max.y);
 
@@ -213,6 +237,7 @@ Header ReadEXR(string filename, Array2D<vector<DeepSample>> &samples)
     dataId.alloc(sampleCount);
     dataZ.alloc(sampleCount);
     dataZB.alloc(sampleCount);
+    dataMask.alloc(sampleCount);
 
     // Read the main image data.
     file.readPixels(dataWindow.min.y, dataWindow.max.y);
@@ -234,6 +259,7 @@ Header ReadEXR(string filename, Array2D<vector<DeepSample>> &samples)
                 out[s].zNear = dataZ.data[y][x][s];
                 out[s].zFar = dataZB.data[y][x][s];
                 out[s].objectId = dataId.data[y][x][s];
+                out[s].mask = dataMask.data[y][x][s];
 
                 // Try to work around bad Arnold default IDs.  If you don't explicitly specify an object ID,
                 // Arnold seems to write uninitialized memory or some other random-looking data to it.
@@ -259,6 +285,7 @@ struct Layer
 {
     string name;
     int objectId;
+    string layerName;
     shared_ptr<SimpleImage> image;
 
     Layer(string name_, int width, int height)
@@ -266,6 +293,12 @@ struct Layer
         name = name_;
         image = make_shared<SimpleImage>(width, height);
     }
+};
+
+struct OutputFilenames
+{
+    string main;
+    string mask;
 };
 
 /*
@@ -303,18 +336,29 @@ struct Layer
  * combine samples by object ID, and the resulting images can be added together with simple
  * additive blending.
  */
-void SeparateIntoAdditiveLayers(vector<Layer> &layers, const Array2D<vector<DeepSample>> &samples)
+void SeparateIntoAdditiveLayers(vector<Layer> &layers, const Array2D<vector<DeepSample>> &samples, const unordered_map<int,OutputFilenames> &objectIdNames)
 {
 /*    layers.push_back(Layer("test", samples.width(), samples.height()));
     layers.back().objectId = 0;
     auto image = layers.back().image;*/
 
-    map<int,shared_ptr<SimpleImage>> imagesPerObjectId;
+    auto getLayerName = [objectIdNames](int objectId) {
+        auto it = objectIdNames.find(objectId);
+        if(it == objectIdNames.end())
+            return OutputFilenames();
+        return it->second;
+    };
+
+    unordered_map<string,shared_ptr<SimpleImage>> imagesPerObjectIdName;
 
     for(int y = 0; y < samples.height(); y++)
     {
         for(int x = 0; x < samples.width(); x++)
         {
+            if(x == 500 && y == 500)
+            {
+                printf("x\n");
+            }
             const vector<DeepSample> &samplesForPixel = samples[y][x];
 
             struct AccumulatedSample {
@@ -323,7 +367,9 @@ void SeparateIntoAdditiveLayers(vector<Layer> &layers, const Array2D<vector<Deep
                     for(int i = 0; i < 4; ++i)
                         rgba[i] = 0;
                 }
-                float rgba[4];
+		float rgba[4];
+		float masked_rgba[4];
+		float mask;
                 int objectId;
                 float zNear;
             };
@@ -334,15 +380,30 @@ void SeparateIntoAdditiveLayers(vector<Layer> &layers, const Array2D<vector<Deep
                 AccumulatedSample new_sample;
                 new_sample.objectId = sample.objectId;
                 new_sample.zNear = sample.zNear;
-                for(int i = 0; i < 4; ++i)
-                    new_sample.rgba[i] = sample.rgba[i];
+
+		// If we have a mask, we'll multiply rgba by it to get a masked version.  However,
+		// the mask will be premultiplied by rgba[3] too.  To get the real mask value, we
+		// need to un-premultiply it.
+		float mask = sample.rgba[3] > 0.0001f? (sample.mask / sample.rgba[3]):0;
+
+		for(int i = 0; i < 4; ++i)
+		{
+                    new_sample.rgba[i] = new_sample.masked_rgba[i] = sample.rgba[i];
+		    new_sample.masked_rgba[i] = new_sample.rgba[i] * mask;
+		}
+
+                // new_sample.mask = sample.mask;
 
                 // Apply the alpha term to each sample underneath this one.
                 float a = sample.rgba[3];
                 for(AccumulatedSample &sample: sampleLayers)
                 {
                     for(int i = 0; i < 4; ++i)
+		    {
                         sample.rgba[i] *= 1-a;
+			sample.masked_rgba[i] *= 1-a;
+		    }
+                    // sample.mask *= 1-a;
                 }
 
                 // Add the new sample.
@@ -359,26 +420,46 @@ void SeparateIntoAdditiveLayers(vector<Layer> &layers, const Array2D<vector<Deep
                     image->data[pixelIdx].rgba[i] += sample.rgba[i];
             } */
 
+            auto getLayer = [&imagesPerObjectIdName, &layers](string layerName, int objectId, int width, int height)
+            {
+                auto it = imagesPerObjectIdName.find(layerName);
+                if(it != imagesPerObjectIdName.end())
+                    return it->second;
+
+                layers.push_back(Layer("color", width, height));
+                Layer &layer = layers.back();
+                layer.objectId = objectId;
+                layer.layerName = layerName;
+                imagesPerObjectIdName[layerName] = layer.image;
+                return layer.image;
+            };
+
             for(const AccumulatedSample &sample: sampleLayers)
             {
                 int objectId = sample.objectId;
-                if(imagesPerObjectId.find(objectId) == imagesPerObjectId.end())
+
+                string layerName = getLayerName(objectId).main;
+                if(layerName != "")
                 {
-                    layers.push_back(Layer("color", samples.width(), samples.height()));
-                    Layer &layer = layers.back();
-                    layer.objectId = objectId;
-                    imagesPerObjectId[objectId] = layer.image;
+                    auto image = getLayer(layerName, objectId, samples.width(), samples.height());
+                    for(int i = 0; i < 4; ++i)
+                        image->data[pixelIdx].rgba[i] += sample.rgba[i];
                 }
 
-                auto image = imagesPerObjectId.at(objectId);
-                for(int i = 0; i < 4; ++i)
-                    image->data[pixelIdx].rgba[i] += sample.rgba[i];
+                string maskName = getLayerName(objectId).mask;
+                if(maskName != "")
+                {
+                    auto image = getLayer(maskName, objectId, samples.width(), samples.height());
+                    for(int i = 0; i < 4; ++i)
+                        image->data[pixelIdx].rgba[i] += sample.masked_rgba[i];
+                }
+                //                image->data[pixelIdx].mask += sample.mask;
             }
         }
     }
 }
 
-void readObjectIdNames(const Header &header, map<int,string> &objectIdNames)
+void readObjectIdNames(const Header &header, unordered_map<int,OutputFilenames> &objectIdNames)
 {
     for(auto it = header.begin(); it != header.end(); ++it)
     {
@@ -387,13 +468,21 @@ void readObjectIdNames(const Header &header, map<int,string> &objectIdNames)
             continue;
 
         string headerName = it.name();
-        if(headerName.substr(0, 9) != "ObjectId/")
-            continue;
+        if(headerName.substr(0, 9) == "ObjectId/")
+        {
+            string idString = headerName.substr(9);
+            int id = atoi(idString.c_str());
+            const StringAttribute &value = dynamic_cast<const StringAttribute &>(attr);
+            objectIdNames[id].main = value.value();
+        }
+        else if(headerName.substr(0, 5) == "Mask/")
+        {
+            string idString = headerName.substr(5);
+            int id = atoi(idString.c_str());
 
-        string idString = headerName.substr(9);
-        int id = atoi(idString.c_str());
-        const StringAttribute &value = dynamic_cast<const StringAttribute &>(attr);
-        objectIdNames[id] = value.value();
+            const StringAttribute &value = dynamic_cast<const StringAttribute &>(attr);
+            objectIdNames[id].mask = value.value();
+        }
     }
 }
 
@@ -428,7 +517,7 @@ private:
     string MakeOutputFilename(string output, const Layer &layer, string name);
 
     string inputFilename;
-    map<int,OutputFilenames> objectIdNames;
+    unordered_map<int,OutputFilenames> objectIdNames;
 };
 
 FlattenFiles::FlattenFiles(string inputFilename_)
@@ -520,13 +609,18 @@ bool FlattenFiles::flatten(string output)
         }
     }
 
+    // If this file has names for object IDs, read them.
+    readObjectIdNames(header, objectIdNames);
+
+    // Set the layer with the object ID 0 to "default", unless a name for that ID
+    // was specified explicitly.
+    if(objectIdNames.find(NO_OBJECT_ID) == objectIdNames.end())
+	    objectIdNames[NO_OBJECT_ID].main = "default";
+
     // Separate the image into layers.
     vector<Layer> layers;
 
-    SeparateIntoAdditiveLayers(layers, samples);
-
-    // If this file has names for object IDs, read them.
-    readObjectIdNames(header, objectIdNames);
+    SeparateIntoAdditiveLayers(layers, samples, objectIdNames);
 
 /*    if(!objectIdNames.empty())
     {
@@ -536,10 +630,6 @@ bool FlattenFiles::flatten(string output)
         printf("\n");
     } */
 
-    // Set the layer with the object ID 0 to "default", unless a name for that ID
-    // was specified explicitly.
-    if(objectIdNames.find(NO_OBJECT_ID) == objectIdNames.end())
-        objectIdNames[NO_OBJECT_ID] = "default";
 
     // Write the results.
     for(int i = 0; i < layers.size(); ++i)
@@ -549,15 +639,8 @@ bool FlattenFiles::flatten(string output)
         // Copy all image attributes, except for built-in EXR headers that we shouldn't set.
         CopyLayerAttributes(header, layer.image->header);
 
-        string objectIdName;
-        if(objectIdNames.find(layer.objectId) != objectIdNames.end())
-            objectIdName = objectIdNames.at(layer.objectId);
-        else
-            objectIdName = ssprintf("#%i", layer.objectId);
+        string outputName = MakeOutputFilename(output, layer, layer.layerName);
 
-        string outputName = MakeOutputFilename(output, layer, objectIdName);
-
-        printf("Writing: %s\n", outputName.c_str());
         try {
             layer.image->WriteEXR(outputName);
         }
@@ -566,6 +649,22 @@ bool FlattenFiles::flatten(string output)
             fprintf(stderr, "%s\n", e.what());
             return false;
         }
+        /*
+        if(filenames.mask != "")
+        {
+            // layer.image->ApplyMask();
+
+            string outputName = MakeOutputFilename(output, layer, filenames.mask);
+            try {
+                layer.image->WriteEXR(outputName);
+            }
+            catch(const BaseExc &e)
+            {
+                fprintf(stderr, "%s\n", e.what());
+                return false;
+            }
+        }
+        */
     }
     return true;
 }
