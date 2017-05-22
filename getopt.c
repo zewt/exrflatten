@@ -151,7 +151,7 @@ int getopt_long(int argc, char* const argv[], const char* optstring,
   current_argument = argv[optind] + 2;
   argument_name_length = strcspn(current_argument, "=");
   for (; o->name; ++o) {
-    if (strncmp(o->name, current_argument, argument_name_length) == 0) {
+    if (strlen(o->name) == argument_name_length && strncmp(o->name, current_argument, argument_name_length) == 0) {
       match = o;
       ++num_matches;
     }
