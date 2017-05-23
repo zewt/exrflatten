@@ -1,6 +1,7 @@
 #include "DeepImageUtil.h"
 #include "SimpleImage.h"
 
+#include <algorithm>
 #include <OpenEXR/ImathVec.h>
 
 using namespace Imf;
@@ -41,4 +42,110 @@ shared_ptr<SimpleImage> DeepImageUtil::CollapseEXR(shared_ptr<const DeepImage> i
     }
 
     return result;
+}
+
+// Change all samples with an object ID of fromObjectId to intoObjectId.
+void DeepImageUtil::CombineObjectId(shared_ptr<DeepImage> image, int fromObjectId, int intoObjectId)
+{
+    auto id = image->GetChannel<uint32_t>("id");
+    for(int y = 0; y < image->height; y++)
+    {
+	for(int x = 0; x < image->width; x++)
+	{
+	    for(int s = 0; s < image->NumSamples(x, y); ++s)
+	    {
+		uint32_t &thisId = id->Get(x,y,s);
+		if(thisId == fromObjectId)
+		    thisId = intoObjectId;
+	    }
+	}
+    }
+}
+
+void DeepImageUtil::CopyLayerAttributes(const Header &input, Header &output)
+{
+    for(auto it = input.begin(); it != input.end(); ++it)
+    {
+	auto &attr = it.attribute();
+	string headerName = it.name();
+	if(headerName == "channels" ||
+	    headerName == "chunkCount" ||
+	    headerName == "compression" ||
+	    headerName == "lineOrder" ||
+	    headerName == "type" ||
+	    headerName == "version")
+	    continue;
+
+	if(headerName.substr(0, 9) == "ObjectId/")
+	    continue;
+
+	output.insert(headerName, attr);
+    }
+}
+
+void DeepImageUtil::SortSamplesByDepth(shared_ptr<DeepImage> image)
+{
+    const auto Z = image->GetChannel<float>("Z");
+
+    vector<int> order;
+    for(int y = 0; y < image->height; y++)
+    {
+	for(int x = 0; x < image->width; x++)
+	{
+	    order.resize(image->sampleCount[y][x]);
+	    for(int sample = 0; sample < order.size(); ++sample)
+		order[sample] = sample;
+
+	    // Sort samples by depth.
+	    const float *depth = Z->GetSamples(x, y);
+	    sort(order.begin(), order.end(), [&](int lhs, int rhs)
+	    {
+		float lhsZNear = depth[lhs];
+		float rhsZNear = depth[rhs];
+		return lhsZNear > rhsZNear;
+	    });
+
+	    for(auto it: image->channels)
+	    {
+		shared_ptr<DeepImageChannel> &channel = it.second;
+		channel->Reorder(x, y, order);
+	    }
+	}
+    }
+}
+
+vector<float> DeepImageUtil::GetSampleVisibility(shared_ptr<const DeepImage> image, int x, int y)
+{
+    vector<float> result;
+
+    auto rgba = image->GetChannel<V4f>("rgba");
+
+    for(int s = 0; s < image->sampleCount[y][x]; ++s)
+    {
+	float alpha = rgba->Get(x, y, s)[3];
+
+	// Apply the alpha term to each sample underneath this one.
+	for(float &sampleAlpha: result)
+	    sampleAlpha *= 1-alpha;
+
+	result.push_back(alpha);
+    }
+    return result;
+}
+
+void DeepImageUtil::ReplaceHighObjectIds(shared_ptr<DeepImage> image)
+{
+    auto id = image->GetChannel<uint32_t>("id");
+
+    for(int y = 0; y < image->height; y++)
+    {
+	for(int x = 0; x < image->width; x++)
+	{
+	    for(int s = 0; s < image->sampleCount[y][x]; ++s)
+	    {
+		if(id->Get(x,y,s) > 1000000)
+		    id->Get(x,y,s) = NO_OBJECT_ID;
+	    }
+	}
+    }
 }

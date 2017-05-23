@@ -86,6 +86,9 @@ public:
     Imf::Array2D<T *> data;
     vector<shared_ptr<Imf::Array2D<T *>>> readPointers;
 
+    // The default value for this channel when adding new samples with AddSample.
+    T defaultValue;
+
     // This is a reference to DeepImage::sampleCount, which is shared by all channels.
     const Imf::Array2D<unsigned int> &sampleCount;
 };
@@ -126,15 +129,12 @@ public:
 	return const_cast<DeepImage *>(this)->GetChannel<T>(name);
     }
 
+    // Add a sample to each channel for the given pixel.
     void AddSample(int x, int y);
 
-    // Sort samples based on the depth of each pixel, furthest from the camera first.
-    void SortSamplesByDepth();
-
+    // Get the number of samples for the given pixel.  All channels always have the same
+    // number of samples for any given pixel.
     int NumSamples(int x, int y) const { return sampleCount[y][x]; }
-
-    vector<float> GetSampleVisibility(int x, int y) const;
-
 
     int width = 0, height = 0;
     Imf::Header header;

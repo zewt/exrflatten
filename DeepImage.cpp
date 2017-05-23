@@ -4,6 +4,7 @@
 #include <OpenEXR/ImfDeepScanLineInputFile.h>
 
 #include <algorithm>
+#include <assert.h>
 
 using namespace std;
 using namespace Imf;
@@ -34,6 +35,7 @@ TypedDeepImageChannel<T>::TypedDeepImageChannel(int width_, int height_, const A
     width(width_), height(height_),
     sampleCount(sampleCount_)
 {
+    defaultValue = T();
     data.resizeErase(height, width);
 
     for(int y = 0; y < data.height(); y++)
@@ -70,8 +72,10 @@ void TypedDeepImageChannel<T>::Reorder(int x, int y, const vector<int> &order)
 template<typename T>
 void TypedDeepImageChannel<T>::AddSample(int x, int y, int count)
 {
+    assert(count > 0);
     T *newArray = new T[count];
     memcpy(newArray, data[y][x], sizeof(T) * (count-1));
+    newArray[count-1] = defaultValue;
     delete[] data[y][x];
     data[y][x] = newArray;
 }
@@ -140,56 +144,6 @@ void DeepImage::AddSample(int x, int y)
 	shared_ptr<DeepImageChannel> channel = it.second;
 	channel->AddSample(x, y, sampleCount[y][x]);
     }
-}
-
-void DeepImage::SortSamplesByDepth()
-{
-    const auto Z = GetChannel<float>("Z");
-
-    vector<int> order;
-    for(int y = 0; y < height; y++)
-    {
-	for(int x = 0; x < width; x++)
-	{
-	    order.resize(sampleCount[y][x]);
-	    for(int sample = 0; sample < order.size(); ++sample)
-		order[sample] = sample;
-
-	    // Sort samples by depth.
-	    const float *depth = Z->GetSamples(x, y);
-	    sort(order.begin(), order.end(), [&](int lhs, int rhs)
-	    {
-		float lhsZNear = depth[lhs];
-		float rhsZNear = depth[rhs];
-		return lhsZNear > rhsZNear;
-	    });
-
-	    for(auto it: channels)
-	    {
-		shared_ptr<DeepImageChannel> &channel = it.second;
-		channel->Reorder(x, y, order);
-	    }
-	}
-    }
-}
-
-vector<float> DeepImage::GetSampleVisibility(int x, int y) const
-{
-    vector<float> result;
-
-    auto rgba = GetChannel<V4f>("rgba");
-
-    for(int s = 0; s < sampleCount[y][x]; ++s)
-    {
-	float alpha = rgba->Get(x, y, s)[3];
-
-	// Apply the alpha term to each sample underneath this one.
-	for(float &sampleAlpha: result)
-	    sampleAlpha *= 1-alpha;
-
-	result.push_back(alpha);
-    }
-    return result;
 }
 
 void DeepImage::AddSampleCountSliceToFramebuffer(DeepFrameBuffer &frameBuffer)

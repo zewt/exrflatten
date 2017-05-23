@@ -35,8 +35,6 @@ using namespace Imf;
 using namespace Imath;
 using namespace Iex;
 
-const int NO_OBJECT_ID = 0;
-
 // This currently processes all object IDs at once, which means we need enough memory to hold all
 // output buffers at once.  We could make a separate pass for each object ID to reduce memory usage,
 // so we only need to hold one at a time.
@@ -49,25 +47,6 @@ const int NO_OBJECT_ID = 0;
 // - separate per-color alpha (RA, GA, BA)
 // - (and lots of other stuff, EXR is "too general")
 
-
-// Try to work around bad Arnold default IDs.  If you don't explicitly specify an object ID,
-// Arnold seems to write uninitialized memory or some other random-looking data to it.
-void ReplaceHighObjectIds(shared_ptr<DeepImage> image)
-{
-    auto id = image->GetChannel<uint32_t>("id");
-
-    for(int y = 0; y < image->height; y++)
-    {
-	for(int x = 0; x < image->width; x++)
-	{
-	    for(int s = 0; s < image->sampleCount[y][x]; ++s)
-	    {
-		if(id->Get(x,y,s) > 1000000)
-		    id->Get(x,y,s) = NO_OBJECT_ID;
-	    }
-	}
-    }
-}
 
 struct Layer
 {
@@ -126,10 +105,6 @@ struct OutputFilenames
  */
 void SeparateIntoAdditiveLayers(vector<Layer> &layers, shared_ptr<const DeepImage> image, const unordered_map<int,OutputFilenames> &objectIdNames)
 {
-/*    layers.push_back(Layer("test", samples.width(), samples.height()));
-    layers.back().objectId = 0;
-    auto image = layers.back().image;*/
-
     auto getLayerName = [objectIdNames](int objectId) {
         auto it = objectIdNames.find(objectId);
         if(it == objectIdNames.end())
@@ -149,16 +124,11 @@ void SeparateIntoAdditiveLayers(vector<Layer> &layers, shared_ptr<const DeepImag
         for(int x = 0; x < image->width; x++)
         {
             struct AccumulatedSample {
-                AccumulatedSample()
-                {
-                    for(int i = 0; i < 4; ++i)
-                        rgba[i] = 0;
-                }
-		V4f rgba;
-		V4f masked_rgba;
-		float mask;
-                int objectId;
-                float zNear;
+		V4f rgba = V4f(0,0,0,0);
+		V4f masked_rgba = V4f(0,0,0,0);
+		float mask = 0;
+                int objectId = 0;
+                float zNear = 0;
             };
 
             vector<AccumulatedSample> sampleLayers;
@@ -197,8 +167,7 @@ void SeparateIntoAdditiveLayers(vector<Layer> &layers, shared_ptr<const DeepImag
             const int pixelIdx = x + y*image->width;
 /*            for(const AccumulatedSample &sample: sampleLayers)
             {
-                for(int i = 0; i < 4; ++i)
-                    image->data[pixelIdx].rgba[i] += sample.rgba[i];
+                image->data[pixelIdx].rgba += sample.rgba;
             } */
 
             auto getLayer = [&imagesPerObjectIdName, &layers](string layerName, int objectId, int width, int height)
@@ -264,27 +233,6 @@ void readObjectIdNames(const Header &header, unordered_map<int,OutputFilenames> 
             const StringAttribute &value = dynamic_cast<const StringAttribute &>(attr);
             objectIdNames[id].mask = value.value();
         }
-    }
-}
-
-void CopyLayerAttributes(const Header &input, Header &output)
-{
-    for(auto it = input.begin(); it != input.end(); ++it)
-    {
-        auto &attr = it.attribute();
-        string headerName = it.name();
-        if(headerName == "channels" ||
-            headerName == "chunkCount" ||
-            headerName == "compression" ||
-            headerName == "lineOrder" ||
-            headerName == "type" ||
-            headerName == "version")
-            continue;
-
-        if(headerName.substr(0, 9) == "ObjectId/")
-            continue;
-
-        output.insert(headerName, attr);
     }
 }
 
@@ -357,24 +305,6 @@ string FlattenFiles::MakeOutputFilename(const Config &config, string output, con
     return outputName;
 }
 
-// Change all samples with an object ID of fromObjectId to intoObjectId.
-void CombineLayer(shared_ptr<DeepImage> image, int fromObjectId, int intoObjectId)
-{
-    auto id = image->GetChannel<uint32_t>("id");
-    for(int y = 0; y < image->height; y++)
-    {
-	for(int x = 0; x < image->width; x++)
-	{
-	    for(int s = 0; s < image->NumSamples(x, y); ++s)
-	    {
-		uint32_t &thisId = id->Get(x,y,s);
-		if(thisId == fromObjectId)
-		    thisId = intoObjectId;
-	    }
-	}
-    }
-}
-
 bool FlattenFiles::flatten(const Config &config)
 {
     unordered_map<int,OutputFilenames> objectIdNames;
@@ -405,7 +335,7 @@ bool FlattenFiles::flatten(const Config &config)
         return false;
     }
 
-    ReplaceHighObjectIds(image);
+    DeepImageUtil::ReplaceHighObjectIds(image);
 
     //const ChannelList &channels = image->header.channels();
     //for(auto i = channels.begin(); i != channels.end(); ++i)
@@ -428,15 +358,15 @@ bool FlattenFiles::flatten(const Config &config)
 
     // Sort all samples by depth.  If we want to support volumes, this is where we'd do the rest
     // of "tidying", splitting samples where they overlap using splitVolumeSample.
-    image->SortSamplesByDepth();
+    DeepImageUtil::SortSamplesByDepth(image);
 
     // If this file has names for object IDs, read them.
     readObjectIdNames(image->header, objectIdNames);
 
     // Set the layer with the object ID 0 to "default", unless a name for that ID
     // was specified explicitly.
-    if(objectIdNames.find(NO_OBJECT_ID) == objectIdNames.end())
-	objectIdNames[NO_OBJECT_ID].main = "default";
+    if(objectIdNames.find(DeepImageUtil::NO_OBJECT_ID) == objectIdNames.end())
+	objectIdNames[DeepImageUtil::NO_OBJECT_ID].main = "default";
 
     
 /*    if(!objectIdNames.empty())
@@ -453,11 +383,11 @@ bool FlattenFiles::flatten(const Config &config)
 
     // If we stroked any objects, re-sort samples, since new samples may have been added.
     if(!config.strokes.empty())
-	image->SortSamplesByDepth();
+	DeepImageUtil::SortSamplesByDepth(image);
 
     // Combine layers.  This just changes the object IDs of samples, so we don't need to re-sort.
     for(auto combine: config.combines)
-	CombineLayer(image, combine.second, combine.first);
+	DeepImageUtil::CombineObjectId(image, combine.second, combine.first);
 
     // Separate the image into layers.
     vector<Layer> layers;
@@ -474,7 +404,7 @@ bool FlattenFiles::flatten(const Config &config)
         auto &layer = layers[i];
 
         // Copy all image attributes, except for built-in EXR headers that we shouldn't set.
-        CopyLayerAttributes(image->header, layer.image->header);
+	DeepImageUtil::CopyLayerAttributes(image->header, layer.image->header);
 
         string outputName = MakeOutputFilename(config, config.outputPattern, layer, layer.layerName);
 
