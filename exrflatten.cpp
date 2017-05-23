@@ -4,7 +4,6 @@
 #include <math.h>
 #include <limits.h>
 #include "getopt.h"
-#include "stroke.h"
 
 #include <algorithm>
 #include <functional>
@@ -19,7 +18,6 @@
 #include <OpenEXR/ImfArray.h>
 #include <OpenEXR/ImfDeepFrameBuffer.h>
 #include <OpenEXR/ImfChannelList.h>
-#include <OpenEXR/ImfOutputFile.h>
 #include <OpenEXR/ImfPreviewImage.h>
 #include <OpenEXR/ImfAttribute.h>
 #include <OpenEXR/ImfStringAttribute.h>
@@ -27,7 +25,10 @@
 #include <OpenEXR/Iex.h>
 
 #include "DeepImage.h"
+#include "DeepImageStroke.h"
+#include "DeepImageUtil.h"
 #include "helpers.h"
+#include "SimpleImage.h"
 
 using namespace std;
 using namespace Imf;
@@ -48,77 +49,6 @@ const int NO_OBJECT_ID = 0;
 // - separate per-color alpha (RA, GA, BA)
 // - (and lots of other stuff, EXR is "too general")
 
-// A simple container for an output EXR containing only RGBA data.
-class SimpleImage
-{
-public:
-    struct pixel {
-        V4f rgba;
-        float mask = 0;
-    };
-    vector<pixel> data;
-    int width, height;
-    Header header;
-
-    SimpleImage(int width_, int height_):
-        header(width_, height_)
-    {
-        width = width_;
-        height = height_;
-        data.resize(width*height);
-    }
-
-    const V4f &GetPixel(int x, int y) const
-    {
-	return const_cast<SimpleImage *>(this)->GetPixel(x, y);
-    }
-
-    V4f &GetPixel(int x, int y)
-    {
-	const int pixelIdx = x + y*width;
-	return data[pixelIdx].rgba;
-    }
-
-    void setColor(V4f color)
-    {
-        for(int y = 0; y < height; y++)
-        {
-            for(int x = 0; x < width; x++)
-		GetPixel(x, y) = color;
-        }
-    }
-
-    /*
-    void ApplyMask()
-    {
-        for(int y = 0; y < height; y++)
-        {
-            for(int x = 0; x < width; x++)
-		GetPixel(x, y) *= data[pixelIdx].mask;
-        }
-    }
-    */
-    void WriteEXR(string filename) const
-    {
-        printf("Writing: %s\n", filename.c_str());
-
-        Header headerCopy(header);
-        headerCopy.channels().insert("R", Channel(FLOAT));
-        headerCopy.channels().insert("G", Channel(FLOAT));
-        headerCopy.channels().insert("B", Channel(FLOAT));
-        headerCopy.channels().insert("A", Channel(FLOAT));
-
-        FrameBuffer frameBuffer;
-        frameBuffer.insert("R", Slice(FLOAT, (char *) &data.data()->rgba[0], sizeof(pixel), sizeof(pixel) * width));
-        frameBuffer.insert("G", Slice(FLOAT, (char *) &data.data()->rgba[1], sizeof(pixel), sizeof(pixel) * width));
-        frameBuffer.insert("B", Slice(FLOAT, (char *) &data.data()->rgba[2], sizeof(pixel), sizeof(pixel) * width));
-        frameBuffer.insert("A", Slice(FLOAT, (char *) &data.data()->rgba[3], sizeof(pixel), sizeof(pixel) * width));
-
-        OutputFile file(filename.c_str(), headerCopy);
-        file.setFrameBuffer(frameBuffer);
-        file.writePixels(height);
-    }
-};
 
 // Try to work around bad Arnold default IDs.  If you don't explicitly specify an object ID,
 // Arnold seems to write uninitialized memory or some other random-looking data to it.
@@ -310,160 +240,6 @@ void SeparateIntoAdditiveLayers(vector<Layer> &layers, shared_ptr<const DeepImag
     }
 }
 
-// Flatten the color channels of a deep EXR to a simple flat layer.
-shared_ptr<SimpleImage> CollapseEXR(shared_ptr<const DeepImage> image, set<int> objectIds = {})
-{
-    shared_ptr<SimpleImage> result = make_shared<SimpleImage>(image->width, image->height);
-
-    auto rgba = image->GetChannel<V4f>("rgba");
-    auto Z = image->GetChannel<float>("Z");
-    auto id = image->GetChannel<uint32_t>("id");
-
-    for(int y = 0; y < image->height; y++)
-    {
-	for(int x = 0; x < image->width; x++)
-	{
-	    V4f &out = result->GetPixel(x, y);
-	    out = V4f(0,0,0,0);
-
-	    int samples = image->NumSamples(x,y);
-	    for(int s = 0; s < samples; ++s)
-	    {
-		bool IncludeLayer = objectIds.empty() || objectIds.find(id->Get(x,y,s)) != objectIds.end();
-
-		V4f color = rgba->Get(x,y,s);
-		float alpha = color[3];
-		for(int channel = 0; channel < 4; ++channel)
-		{
-		    if(IncludeLayer)
-			out[channel] = color[channel] + out[channel]*(1-alpha);
-		    else
-			out[channel] =                  out[channel]*(1-alpha);
-		}
-	    }
-	}
-    }
-
-    return result;
-}
-
-struct StrokeConfig
-{
-    int objectId = 0;
-    float radius = 1.0f;
-    float pushTowardsCamera = 1.0f;
-    V3f strokeColor = {0,0,0};
-};
-
-void AddOutlines(const StrokeConfig &config, shared_ptr<DeepImage> image)
-{
-    // Flatten the image.  We'll use this as the mask to create the stroke.
-    shared_ptr<SimpleImage> mask = CollapseEXR(image, { config.objectId });
-
-    // Find closest sample (for our object ID) to the camera for each point.
-    Array2D<int> NearestSample;
-    NearestSample.resizeErase(image->height, image->width);
-
-    auto rgba = image->GetChannel<V4f>("rgba");
-    auto id = image->GetChannel<uint32_t>("id");
-    auto ZBack = image->GetChannel<float>("ZBack");
-    auto Z = image->GetChannel<float>("Z");
-
-    for(int y = 0; y < image->height; y++)
-    {
-        for(int x = 0; x < image->width; x++)
-        {
-	    int &nearest = NearestSample[y][x];
-	    nearest = -1;
-
-	    for(int s = 0; s < image->NumSamples(x,y); ++s)
-            {
-		if(id->Get(x,y,s) != config.objectId)
-		    continue;
-
-		if(nearest != -1)
-		{
-		    if(Z->Get(x,y,s) > Z->Get(x,y,nearest))
-			continue;
-		}
-
-		nearest = s;
-	    }
-	}
-    }
-
-    // Calculate a stroke for the flattened image, and insert the stroke as deep samples, so
-    // it'll get composited at the correct depth, allowing it to be obscured.
-    Stroke::CalculateDistance(mask->width, mask->height,
-    [&](int x, int y) {
-	float result = mask->GetPixel(x, y)[3];
-	result = max(0.0f, result);
-	result = min(1.0f, result);
-
-	// Skip this line for an inner stroke instead of an outer stroke:
-	result = 1.0f - result;
-	
-	return result;
-    }, [&](int x, int y, int sx, int sy, float distance) {
-	float alpha = Stroke::DistanceAndRadiusToAlpha(distance, config.radius);
-
-	// Don't add an empty sample.
-	if(alpha <= 0.00001f)
-	    return;
-
-	// sx/sy might be out of bounds.  This normally only happens if the layer is completely
-	// empty and alpha will be 0 so we won't get here, but check to be safe.
-	if(sx < 0 || sy < 0 || sx >= NearestSample.width() || sy >= NearestSample.height())
-	    return;
-
-	// SourceSample is the nearest visible pixel to this stroke, which we treat as the
-	// "source" of the stroke.  StrokeSample is the sample underneath the stroke itself,
-	// if any.
-	int SourceSample = NearestSample[sy][sx];
-	int StrokeSample = NearestSample[y][x];
-
-	// For samples that lie outside the mask, StrokeSample.zNear won't be set, and we'll
-	// use the Z distance from the source sample.  For samples that lie within the mask,
-	// eg. because there's antialiasing, use whichever is nearer, the sample under the stroke
-	// or the sample the stroke came from.  In this case, the sample under the stroke might
-	// be closer to the camera than the source sample, so if we don't do this the stroke will
-	// end up being behind the shape.
-	//
-	// Note that either of these may not actually have a sample, in which case the index will
-	// be -1 and we'll use the default.
-	float zDistance = min(Z->GetWithDefault(sx, sy, SourceSample, 10000000),
-	                      Z->GetWithDefault(x, y, StrokeSample, 10000000));
-
-	// Bias the distance closer to the camera.  We need to subtract at least a small amount to
-	// make sure the stroke is on top of the source shape.  Subtracting more helps avoid aliasing
-	// where two stroked objects are overlapping, but too much will cause strokes to be on top
-	// of objects they shouldn't.
-	zDistance -= config.pushTowardsCamera;
-	// zDistance = 0;
-
-	/*
-	 * An outer stroke is normally blended underneath the shape, and only antialiased on
-	 * the outer edge of the stroke.  The inner edge where the stroke meets the shape isn't
-	 * antialiased.  Instead, the antialiasing of the shape on top of it is what gives the
-	 * smooth blending from the stroke to the shape.
-	 *
-	 * However, we want to put the stroke over the shape, not underneath it, so it can go over
-	 * other stroked objects.  Deal with this by mixing the existing color over the stroke color.
-	 */
-	V4f strokeColor = V4f(config.strokeColor[0], config.strokeColor[1], config.strokeColor[2], 1) * alpha;
-	V4f topColor = mask->GetPixel(x, y);
-	V4f mixedColor = topColor + strokeColor * (1-topColor[3]);
-
-	// Add a sample for the stroke.
-	image->AddSample(x, y);
-
-	rgba->GetLast(x,y) = mixedColor;
-	Z->GetLast(x,y) = zDistance;
-	ZBack->GetLast(x,y) = zDistance;
-	id->GetLast(x,y) = config.objectId;
-    });
-}
-
 void readObjectIdNames(const Header &header, unordered_map<int,OutputFilenames> &objectIdNames)
 {
     for(auto it = header.begin(); it != header.end(); ++it)
@@ -517,7 +293,7 @@ struct Config
     string inputFilename;
     string outputPattern;
 
-    vector<StrokeConfig> strokes;
+    vector<DeepImageStroke::Config> strokes;
 
     // A list of (dst, src) pairs to combine layers before writing them.
     vector<pair<int,int>> combines;
@@ -673,7 +449,7 @@ bool FlattenFiles::flatten(const Config &config)
 
     // Apply strokes to layers.
     for(auto stroke: config.strokes)
-	AddOutlines(stroke, image);
+	DeepImageStroke::AddStroke(stroke, image);
 
     // If we stroked any objects, re-sort samples, since new samples may have been added.
     if(!config.strokes.empty())
@@ -687,7 +463,7 @@ bool FlattenFiles::flatten(const Config &config)
     vector<Layer> layers;
     SeparateIntoAdditiveLayers(layers, image, objectIdNames);
 
-    shared_ptr<SimpleImage> flat = CollapseEXR(image);
+    shared_ptr<SimpleImage> flat = DeepImageUtil::CollapseEXR(image);
     layers.push_back(Layer("color", image->width, image->height));
     layers.back().layerName = "main";
     layers.back().image = flat;

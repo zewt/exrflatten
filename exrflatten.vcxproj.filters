@@ -5,14 +5,18 @@
     <ClCompile Include="exrsamples.cpp" />
     <ClCompile Include="helpers.cpp" />
     <ClCompile Include="getopt.c" />
-    <ClCompile Include="stroke.cpp" />
     <ClCompile Include="DeepImage.cpp" />
+    <ClCompile Include="DeepImageUtil.cpp" />
+    <ClCompile Include="SimpleImage.cpp" />
+    <ClCompile Include="DeepImageStroke.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="exrsamples.h" />
     <ClInclude Include="helpers.h" />
     <ClInclude Include="getopt.h" />
-    <ClInclude Include="stroke.h" />
     <ClInclude Include="DeepImage.h" />
+    <ClInclude Include="DeepImageUtil.h" />
+    <ClInclude Include="SimpleImage.h" />
+    <ClInclude Include="DeepImageStroke.h" />
   </ItemGroup>
 </Project>

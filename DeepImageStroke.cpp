@@ -1,13 +1,18 @@
-#include "stroke.h"
+#include "DeepImageStroke.h"
 
 #include <functional>
 #include <vector>
 #include <algorithm>
 
 #include <OpenEXR/ImfArray.h>
+#include <OpenEXR/ImathVec.h>
 
 using namespace std;
 using namespace Imf;
+using namespace Imath;
+
+#include "DeepImageUtil.h"
+#include "SimpleImage.h"
 
 namespace EuclideanMetric
 {
@@ -22,7 +27,7 @@ namespace EuclideanMetric
     }
 };
 
-void Stroke::CalculateDistance(
+void DeepImageStroke::CalculateDistance(
     int width, int height,
     function<float(int x, int y)> GetMask,
     function<void(int x, int y, int sx, int sy, float distance)> PutResult)
@@ -140,7 +145,7 @@ void Stroke::CalculateDistance(
     }
 }
 
-float Stroke::DistanceAndRadiusToAlpha(float distance, float radius)
+float DeepImageStroke::DistanceAndRadiusToAlpha(float distance, float radius)
 {
     // At 0, we're completely inside the shape.  Don't draw the stroke at all.
     if(distance <= 0)
@@ -161,6 +166,115 @@ float Stroke::DistanceAndRadiusToAlpha(float distance, float radius)
 
     // We're completely outside the stroke.
     return 0;
+}
+
+void DeepImageStroke::AddStroke(const DeepImageStroke::Config &config, shared_ptr<DeepImage> image)
+{
+    // Flatten the image.  We'll use this as the mask to create the stroke.
+    shared_ptr<SimpleImage> mask = DeepImageUtil::CollapseEXR(image, { config.objectId });
+
+    // Find closest sample (for our object ID) to the camera for each point.
+    Array2D<int> NearestSample;
+    NearestSample.resizeErase(image->height, image->width);
+
+    auto rgba = image->GetChannel<V4f>("rgba");
+    auto id = image->GetChannel<uint32_t>("id");
+    auto ZBack = image->GetChannel<float>("ZBack");
+    auto Z = image->GetChannel<float>("Z");
+
+    for(int y = 0; y < image->height; y++)
+    {
+        for(int x = 0; x < image->width; x++)
+        {
+	    int &nearest = NearestSample[y][x];
+	    nearest = -1;
+
+	    for(int s = 0; s < image->NumSamples(x,y); ++s)
+            {
+		if(id->Get(x,y,s) != config.objectId)
+		    continue;
+
+		if(nearest != -1)
+		{
+		    if(Z->Get(x,y,s) > Z->Get(x,y,nearest))
+			continue;
+		}
+
+		nearest = s;
+	    }
+	}
+    }
+
+    // Calculate a stroke for the flattened image, and insert the stroke as deep samples, so
+    // it'll get composited at the correct depth, allowing it to be obscured.
+    CalculateDistance(mask->width, mask->height,
+    [&](int x, int y) {
+	float result = mask->GetRGBA(x, y)[3];
+	result = max(0.0f, result);
+	result = min(1.0f, result);
+
+	// Skip this line for an inner stroke instead of an outer stroke:
+	result = 1.0f - result;
+	
+	return result;
+    }, [&](int x, int y, int sx, int sy, float distance) {
+	float alpha = DistanceAndRadiusToAlpha(distance, config.radius);
+
+	// Don't add an empty sample.
+	if(alpha <= 0.00001f)
+	    return;
+
+	// sx/sy might be out of bounds.  This normally only happens if the layer is completely
+	// empty and alpha will be 0 so we won't get here, but check to be safe.
+	if(sx < 0 || sy < 0 || sx >= NearestSample.width() || sy >= NearestSample.height())
+	    return;
+
+	// SourceSample is the nearest visible pixel to this stroke, which we treat as the
+	// "source" of the stroke.  StrokeSample is the sample underneath the stroke itself,
+	// if any.
+	int SourceSample = NearestSample[sy][sx];
+	int StrokeSample = NearestSample[y][x];
+
+	// For samples that lie outside the mask, StrokeSample.zNear won't be set, and we'll
+	// use the Z distance from the source sample.  For samples that lie within the mask,
+	// eg. because there's antialiasing, use whichever is nearer, the sample under the stroke
+	// or the sample the stroke came from.  In this case, the sample under the stroke might
+	// be closer to the camera than the source sample, so if we don't do this the stroke will
+	// end up being behind the shape.
+	//
+	// Note that either of these may not actually have a sample, in which case the index will
+	// be -1 and we'll use the default.
+	float zDistance = min(Z->GetWithDefault(sx, sy, SourceSample, 10000000),
+	                      Z->GetWithDefault(x, y, StrokeSample, 10000000));
+
+	// Bias the distance closer to the camera.  We need to subtract at least a small amount to
+	// make sure the stroke is on top of the source shape.  Subtracting more helps avoid aliasing
+	// where two stroked objects are overlapping, but too much will cause strokes to be on top
+	// of objects they shouldn't.
+	zDistance -= config.pushTowardsCamera;
+	// zDistance = 0;
+
+	/*
+	 * An outer stroke is normally blended underneath the shape, and only antialiased on
+	 * the outer edge of the stroke.  The inner edge where the stroke meets the shape isn't
+	 * antialiased.  Instead, the antialiasing of the shape on top of it is what gives the
+	 * smooth blending from the stroke to the shape.
+	 *
+	 * However, we want to put the stroke over the shape, not underneath it, so it can go over
+	 * other stroked objects.  Deal with this by mixing the existing color over the stroke color.
+	 */
+	V4f strokeColor = V4f(config.strokeColor[0], config.strokeColor[1], config.strokeColor[2], 1) * alpha;
+	V4f topColor = mask->GetRGBA(x, y);
+	V4f mixedColor = topColor + strokeColor * (1-topColor[3]);
+
+	// Add a sample for the stroke.
+	image->AddSample(x, y);
+
+	rgba->GetLast(x,y) = mixedColor;
+	Z->GetLast(x,y) = zDistance;
+	ZBack->GetLast(x,y) = zDistance;
+	id->GetLast(x,y) = config.objectId;
+    });
 }
 
 /*
