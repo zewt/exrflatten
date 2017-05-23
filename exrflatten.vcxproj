@@ -68,7 +68,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>OpenEXR\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>IlmImf-2_2.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>IlmImf-2_2.lib;Iex-2_2.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>bin\$(TargetName)$(TargetExt)</OutputFile>
     </Link>
   </ItemDefinitionGroup>
@@ -89,7 +89,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>OpenEXR\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>IlmImf-2_2.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>IlmImf-2_2.lib;Iex-2_2.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>bin\$(TargetName)$(TargetExt)</OutputFile>
     </Link>
   </ItemDefinitionGroup>
@@ -98,11 +98,13 @@
     <ClCompile Include="exrsamples.cpp" />
     <ClCompile Include="getopt.c" />
     <ClCompile Include="helpers.cpp" />
+    <ClCompile Include="stroke.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="exrsamples.h" />
     <ClInclude Include="getopt.h" />
     <ClInclude Include="helpers.h" />
+    <ClInclude Include="stroke.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
