@@ -94,6 +94,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="DeepImage.cpp" />
     <ClCompile Include="exrflatten.cpp" />
     <ClCompile Include="exrsamples.cpp" />
     <ClCompile Include="getopt.c" />
@@ -101,6 +102,7 @@
     <ClCompile Include="stroke.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="DeepImage.h" />
     <ClInclude Include="exrsamples.h" />
     <ClInclude Include="getopt.h" />
     <ClInclude Include="helpers.h" />

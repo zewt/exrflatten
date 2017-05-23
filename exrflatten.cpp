@@ -15,7 +15,6 @@
 
 // Too fine-grained:
 #include <OpenEXR/ImfCRgbaFile.h>
-#include <OpenEXR/ImfDeepScanLineInputFile.h>
 #include <OpenEXR/ImathBox.h>
 #include <OpenEXR/ImfArray.h>
 #include <OpenEXR/ImfDeepFrameBuffer.h>
@@ -27,6 +26,7 @@
 #include <OpenEXR/ImfMatrixAttribute.h>
 #include <OpenEXR/Iex.h>
 
+#include "DeepImage.h"
 #include "helpers.h"
 
 using namespace std;
@@ -120,357 +120,23 @@ public:
     }
 };
 
-// A base class for a deep image channel.  Most of the real work is in TypedDeepImageChannel.
-class DeepImageChannel
+// Try to work around bad Arnold default IDs.  If you don't explicitly specify an object ID,
+// Arnold seems to write uninitialized memory or some other random-looking data to it.
+void ReplaceHighObjectIds(shared_ptr<DeepImage> image)
 {
-public:
-    virtual ~DeepImageChannel()
-    {
-    }
-
-    virtual void AddToFramebuffer(string name, const Header &header, DeepFrameBuffer &frameBuffer, int channel = 0) = 0;
-    virtual void Reorder(int x, int y, const vector<int> &order) = 0;
-    virtual void AddSample(int x, int y, int count) = 0;
-};
-
-template<class T> PixelType GetEXRPixelType();
-template<> PixelType GetEXRPixelType<float>() { return FLOAT; }
-template<> PixelType GetEXRPixelType<V3f>() { return FLOAT; }
-template<> PixelType GetEXRPixelType<V4f>() { return FLOAT; }
-template<> PixelType GetEXRPixelType<uint32_t>() { return UINT; }
-
-// Return the number of bytes from one component of a sample to the next.  For
-// vector types, this is from one element of the vector to the next.
-template<class T> int GetEXRElementSize();
-template<> int GetEXRElementSize<float>() { return sizeof(float); }
-template<> int GetEXRElementSize<V3f>() { return sizeof(float); }
-template<> int GetEXRElementSize<V4f>() { return sizeof(float); }
-template<> int GetEXRElementSize<uint32_t>() { return sizeof(uint32_t); }
-
-template<typename T>
-class TypedDeepImageChannel: public DeepImageChannel
-{
-public:
-    TypedDeepImageChannel<T>(int width_, int height_, const Array2D<unsigned int> &sampleCount_):
-	width(width_), height(height_),
-	sampleCount(sampleCount_)
-    {
-	data.resizeErase(height, width);
-
-	for(int y = 0; y < data.height(); y++)
-	{
-	    for(int x = 0; x < data.width(); x++)
-	    {
-		data[y][x] = new T[sampleCount[y][x]];
-	    }
-	}
-    }
-
-    ~TypedDeepImageChannel()
-    {
-	for(int y = 0; y < data.height(); y++)
-	{
-	    for(int x = 0; x < data.width(); x++)
-		delete[] data[y][x];
-	}
-    }
-
-    // Each pixel has multiple samples, and each sample can have multiple elements for vector types.
-    // The X stride is the number of bytes from one pixel to the next: sizeof(vector<T>).
-    // The sample stride is the number of bytes from one sample to the next: sizeof(T).
-    void AddToFramebuffer(string name, const Header &header, DeepFrameBuffer &frameBuffer, int channel = 0)
-    {
-	// When reading deep files, OpenEXR expects a packed array of pointers for each pixel,
-	// pointing to an array of sample values, and it takes a stride value from one sample
-	// to the next.  However, there's no way to specify an offset from the start of the
-	// sample array so you can read vectors.  You can make it read the first component
-	// of a vector, but there's no way to make it skip ahead to read the second.  To work
-	// around this, we need to allocate a separate buffer for each channel of a vector,
-	// and fill it with pointers to each component.
-	//
-	// The temporary array is stored in readPointer.  It needs to remain allocated until
-	// readPixels is called.
-	Array2D<T *> *readArray;
-	if(channel == 0)
-	{
-	    readArray = &data;
-	}
-	else
-	{
-	    shared_ptr<Array2D<T *>> readPointer = make_shared<Array2D<T *>>();
-	    readPointer->resizeErase(data.height(),data.width());
-	    for(int y = 0; y < data.height(); y++)
-	    {
-		for(int x = 0; x < data.width(); x++)
-		{
-		    char *c = (char *) data[y][x];
-		    c += GetEXRElementSize<T>() * channel;
-		    (*readPointer)[y][x] = (T *) c;
-		}
-	    }
-
-	    readPointers.push_back(readPointer);
-
-	    readArray = readPointer.get();
-	}
-
-	Box2i dataWindow = header.dataWindow();
-	char *base = (char *) &(*readArray)[-dataWindow.min.y][-dataWindow.min.x];
-
-	PixelType pt = GetEXRPixelType<T>();
-	int xStride = sizeof(T*);
-	int yStride = sizeof(T*) * data.width();
-	int sampleStride = sizeof(T);
-	DeepSlice slice(pt, base, xStride, yStride, sampleStride);
-	frameBuffer.insert(name, slice);
-    }
-
-    // Reorder our data to the given order.  If order is { 2, 1, 0 }, we'll reverse the
-    // order.
-    void Reorder(int x, int y, const vector<int> &order)
-    {
-	T *newValues = new T[order.size()];
-
-	for(int i = 0; i < order.size(); ++i)
-	    newValues[i] = data[y][x][order[i]];
-
-	delete[] data[y][x];
-	data[y][x] = newValues;
-    }
-
-    // Add an empty sample to the end of the list for the given pixel.
-    void AddSample(int x, int y, int count)
-    {
-	T *newArray = new T[count];
-	memcpy(newArray, data[y][x], sizeof(T) * (count-1));
-	delete[] data[y][x];
-	data[y][x] = newArray;
-    }
-
-    // Get all samples for the given pixel.
-    const T *GetSamples(int x, int y) const
-    {
-	return const_cast<TypedDeepImageChannel<T> *>(this)->GetSamples(x, y);
-    }
-
-    T *GetSamples(int x, int y)
-    {
-	return data[y][x];
-    }
-
-    // Get a sample for for the given pixel.
-    const T &Get(int x, int y, int sample) const
-    {
-	return const_cast<TypedDeepImageChannel<T> *>(this)->Get(x, y, sample);
-    }
-
-    T &Get(int x, int y, int sample)
-    {
-	return data[y][x][sample];
-    }
-
-    // If sample is -1, return defaultValue.  Otherwise, return the actual sample value.
-    T GetWithDefault(int x, int y, int sample, T defaultValue) const
-    {
-	if(sample == -1)
-	    return defaultValue;
-	return Get(x, y, sample);
-    }
-
-    // Get the last sample for a pixel.  This is useful after calling AddSample to get
-    // the sample that was just added.
-    T &GetLast(int x, int y)
-    {
-	int last = sampleCount[y][x]-1;
-	return data[y][x][last];
-    }
-
-    int width, height;
-    Array2D<T *> data;
-    vector<shared_ptr<Array2D<T *>>> readPointers;
-
-    // This is a reference to DeepImage::sampleCount, which is shared by all channels.
-    const Array2D<unsigned int> &sampleCount;
-};
-
-class DeepImage
-{
-public:
-    static shared_ptr<DeepImage> ReadEXR(string filename);
-
-    DeepImage(int width_, int height_)
-    {
-	width = width_;
-	height = height_;
-	sampleCount.resizeErase(height, width);
-    }
-
-    // Add a channel, and add it to the DeepFrameBuffer to be read.
-    //
-    // channelName is the name to assign this channel.  This usually corresponds with an EXR channel
-    // or layer name, but this isn't required.
-    //
-    // For vector types, exrChannels is a list of the EXR channels for each component, eg. { "P.X", "P.Y", "P.Z" }.
-    template<typename T>
-    shared_ptr<TypedDeepImageChannel<T>> AddChannelToFramebuffer(string channelName, vector<string> exrChannels, DeepFrameBuffer &frameBuffer)
-    {
-	shared_ptr<TypedDeepImageChannel<T>> channel = AddChannel<T>(channelName);
-	int idx = 0;
-	for(string exrChannel: exrChannels)
-	    channel->AddToFramebuffer(exrChannel, header, frameBuffer, idx++);
-	return channel;
-    }
-
-    // Add a channel with the given name.
-    template<typename T>
-    shared_ptr<TypedDeepImageChannel<T>> AddChannel(string name)
-    {
-	auto channel = make_shared<TypedDeepImageChannel<T>>(width, height, sampleCount);
-	channels[name] = channel;
-	return channel;
-    }
-
-    template<typename T>
-    shared_ptr<const TypedDeepImageChannel<T>> GetChannel(string name) const
-    {
-	return const_cast<DeepImage *>(this)->GetChannel<T>(name);
-    }
-
-    template<typename T>
-    shared_ptr<TypedDeepImageChannel<T>> GetChannel(string name)
-    {
-	auto it = channels.find(name);
-	if(it == channels.end())
-	    return nullptr;
-
-	shared_ptr<DeepImageChannel> result = it->second;
-	auto typedResult = dynamic_pointer_cast<TypedDeepImageChannel<T>>(result);
-	return typedResult;
-    }
-
-    void AddSample(int x, int y)
-    {
-	sampleCount[y][x]++;
-	for(auto it: channels)
-	{
-	    shared_ptr<DeepImageChannel> channel = it.second;
-	    channel->AddSample(x, y, sampleCount[y][x]);
-	}
-    }
-
-    // Sort samples based on the depth of each pixel, furthest from the camera first.
-    void SortSamplesByDepth()
-    {
-	const auto Z = GetChannel<float>("Z");
-
-	vector<int> order;
-	for(int y = 0; y < height; y++)
-	{
-	    for(int x = 0; x < width; x++)
-	    {
-		order.resize(sampleCount[y][x]);
-		for(int sample = 0; sample < order.size(); ++sample)
-		    order[sample] = sample;
-
-		// Sort samples by depth.
-		const float *depth = Z->GetSamples(x, y);
-		sort(order.begin(), order.end(), [&](int lhs, int rhs)
-		{
-		    float lhsZNear = depth[lhs];
-		    float rhsZNear = depth[rhs];
-		    return lhsZNear > rhsZNear;
-		});
-
-		for(auto it: channels)
-		{
-		    shared_ptr<DeepImageChannel> &channel = it.second;
-		    channel->Reorder(x, y, order);
-		}
-	    }
-	}
-    }
-
-    int NumSamples(int x, int y) const
-    {
-	return sampleCount[y][x];
-    }
-
-
-    vector<float> GetSampleVisibility(int x, int y) const
-    {
-	vector<float> result;
-
-	auto rgba = GetChannel<V4f>("rgba");
-
-	for(int s = 0; s < sampleCount[y][x]; ++s)
-	{
-	    float alpha = rgba->Get(x, y, s)[3];
-
-	    // Apply the alpha term to each sample underneath this one.
-	    for(float &sampleAlpha: result)
-		sampleAlpha *= 1-alpha;
-
-	    result.push_back(alpha);
-	}
-	return result;
-    }
-
-    int width = 0, height = 0;
-    Header header;
-    map<string, shared_ptr<DeepImageChannel>> channels;
-    Array2D<unsigned int> sampleCount;
-};
-
-shared_ptr<DeepImage> DeepImage::ReadEXR(string filename)
-{
-    DeepScanLineInputFile file(filename.c_str());
-
-    Box2i dataWindow = file.header().dataWindow();
-    const int width = dataWindow.max.x - dataWindow.min.x + 1;
-    const int height = dataWindow.max.y - dataWindow.min.y + 1;
-
-    shared_ptr<DeepImage> image = make_shared<DeepImage>(width, height);
-    image->header = file.header();
-
-    // Read the sample counts.  This needs to be done before we start adding channels, so we know
-    // how much space to allocate.
-    DeepFrameBuffer frameBuffer;
-    frameBuffer.insertSampleCountSlice(Slice(UINT,
-	(char *) (&image->sampleCount[0][0] - dataWindow.min.x - dataWindow.min.y * width),
-	sizeof(unsigned int), sizeof(unsigned int) * width));
-    file.setFrameBuffer(frameBuffer);
-    file.readPixelSampleCounts(dataWindow.min.y, dataWindow.max.y);
-
-    // Set up the channels we're interested in.
-    image->AddChannelToFramebuffer<V4f>("rgba", {"R", "G", "B", "A"}, frameBuffer);
-    image->AddChannelToFramebuffer<uint32_t>("id", {"id"}, frameBuffer);
-    image->AddChannelToFramebuffer<float>("Z", { "Z" }, frameBuffer);
-    image->AddChannelToFramebuffer<float>("ZBack", {"ZBack"}, frameBuffer);
-    image->AddChannelToFramebuffer<float>("mask", { "mask" }, frameBuffer);
-    image->AddChannelToFramebuffer<V3f>("P", { "P.X", "P.Y", "P.Z" }, frameBuffer);
-    image->AddChannelToFramebuffer<V3f>("N", { "N.X", "N.Y", "N.Z" }, frameBuffer);
-
-    // Read the main image data.
-    file.setFrameBuffer(frameBuffer);
-    file.readPixelSampleCounts(dataWindow.min.y, dataWindow.max.y);
-    file.readPixels(dataWindow.min.y, dataWindow.max.y);
-
-    // Try to work around bad Arnold default IDs.  If you don't explicitly specify an object ID,
-    // Arnold seems to write uninitialized memory or some other random-looking data to it.
     auto id = image->GetChannel<uint32_t>("id");
+
     for(int y = 0; y < image->height; y++)
     {
-        for(int x = 0; x < image->width; x++)
-        {
-            for(int s = 0; s < image->sampleCount[y][x]; ++s)
-            {
-                if(id->Get(x,y,s) > 1000000)
+	for(int x = 0; x < image->width; x++)
+	{
+	    for(int s = 0; s < image->sampleCount[y][x]; ++s)
+	    {
+		if(id->Get(x,y,s) > 1000000)
 		    id->Get(x,y,s) = NO_OBJECT_ID;
-            }
-        }
+	    }
+	}
     }
-
-    return image;
 }
 
 struct Layer
@@ -939,7 +605,21 @@ bool FlattenFiles::flatten(const Config &config)
 
     shared_ptr<DeepImage> image;
     try {
-	image = DeepImage::ReadEXR(config.inputFilename);
+	DeepImageReader reader;
+	image = reader.Open(config.inputFilename);
+
+	// Set up the channels we're interested in.
+	DeepFrameBuffer frameBuffer;
+	image->AddSampleCountSliceToFramebuffer(frameBuffer);
+	image->AddChannelToFramebuffer<V4f>("rgba", {"R", "G", "B", "A"}, frameBuffer);
+	image->AddChannelToFramebuffer<uint32_t>("id", {"id"}, frameBuffer);
+	image->AddChannelToFramebuffer<float>("Z", { "Z" }, frameBuffer);
+	image->AddChannelToFramebuffer<float>("ZBack", {"ZBack"}, frameBuffer);
+	image->AddChannelToFramebuffer<float>("mask", { "mask" }, frameBuffer);
+	image->AddChannelToFramebuffer<V3f>("P", { "P.X", "P.Y", "P.Z" }, frameBuffer);
+	image->AddChannelToFramebuffer<V3f>("N", { "N.X", "N.Y", "N.Z" }, frameBuffer);
+
+	reader.Read(frameBuffer);
     }
     catch(const BaseExc &e)
     {
@@ -948,9 +628,10 @@ bool FlattenFiles::flatten(const Config &config)
         fprintf(stderr, "%s\n", e.what());
         return false;
     }
-    Header header = image->header;
 
-    //const ChannelList &channels = header.channels();
+    ReplaceHighObjectIds(image);
+
+    //const ChannelList &channels = image->header.channels();
     //for(auto i = channels.begin(); i != channels.end(); ++i)
     //    printf("Channel %s has type %i\n", i.name(), i.channel().type);
 
@@ -974,7 +655,7 @@ bool FlattenFiles::flatten(const Config &config)
     image->SortSamplesByDepth();
 
     // If this file has names for object IDs, read them.
-    readObjectIdNames(header, objectIdNames);
+    readObjectIdNames(image->header, objectIdNames);
 
     // Set the layer with the object ID 0 to "default", unless a name for that ID
     // was specified explicitly.
@@ -1017,7 +698,7 @@ bool FlattenFiles::flatten(const Config &config)
         auto &layer = layers[i];
 
         // Copy all image attributes, except for built-in EXR headers that we shouldn't set.
-        CopyLayerAttributes(header, layer.image->header);
+        CopyLayerAttributes(image->header, layer.image->header);
 
         string outputName = MakeOutputFilename(config, config.outputPattern, layer, layer.layerName);
 

@@ -6,11 +6,13 @@
     <ClCompile Include="helpers.cpp" />
     <ClCompile Include="getopt.c" />
     <ClCompile Include="stroke.cpp" />
+    <ClCompile Include="DeepImage.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="exrsamples.h" />
     <ClInclude Include="helpers.h" />
     <ClInclude Include="getopt.h" />
     <ClInclude Include="stroke.h" />
+    <ClInclude Include="DeepImage.h" />
   </ItemGroup>
 </Project>
