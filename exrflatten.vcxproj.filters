@@ -4,9 +4,11 @@
     <ClCompile Include="exrflatten.cpp" />
     <ClCompile Include="exrsamples.cpp" />
     <ClCompile Include="helpers.cpp" />
+    <ClCompile Include="getopt.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="exrsamples.h" />
     <ClInclude Include="helpers.h" />
+    <ClInclude Include="getopt.h" />
   </ItemGroup>
 </Project>
