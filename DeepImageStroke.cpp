@@ -244,8 +244,9 @@ void DeepImageStroke::AddStroke(const DeepImageStroke::Config &config, shared_pt
 	//
 	// Note that either of these may not actually have a sample, in which case the index will
 	// be -1 and we'll use the default.
-	float zDistance = min(Z->GetWithDefault(sx, sy, SourceSample, 10000000),
-	                      Z->GetWithDefault(x, y, StrokeSample, 10000000));
+	float SourceSampleDistance = Z->GetWithDefault(sx, sy, SourceSample, 10000000);
+	float StrokeSampleDistance = Z->GetWithDefault(x, y, StrokeSample, 10000000);
+	float zDistance = min(SourceSampleDistance, StrokeSampleDistance);
 
 	// Bias the distance closer to the camera.  We need to subtract at least a small amount to
 	// make sure the stroke is on top of the source shape.  Subtracting more helps avoid aliasing
