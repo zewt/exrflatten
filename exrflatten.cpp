@@ -114,9 +114,22 @@ void SeparateIntoAdditiveLayers(vector<Layer> &layers, shared_ptr<const DeepImag
 
     unordered_map<string,shared_ptr<SimpleImage>> imagesPerObjectIdName;
 
+    auto getLayer = [&imagesPerObjectIdName, &layers](string layerName, int objectId, int width, int height)
+    {
+	auto it = imagesPerObjectIdName.find(layerName);
+	if(it != imagesPerObjectIdName.end())
+	    return it->second;
+
+	layers.push_back(Layer("color", width, height));
+	Layer &layer = layers.back();
+	layer.objectId = objectId;
+	layer.layerName = layerName;
+	imagesPerObjectIdName[layerName] = layer.image;
+	return layer.image;
+    };
+
     auto rgba = image->GetChannel<V4f>("rgba");
     auto id = image->GetChannel<uint32_t>("id");
-    auto Z = image->GetChannel<float>("Z");
     auto mask = image->GetChannel<float>("mask");
 
     for(int y = 0; y < image->height; y++)
@@ -125,20 +138,10 @@ void SeparateIntoAdditiveLayers(vector<Layer> &layers, shared_ptr<const DeepImag
         {
 	    vector<float> SampleVisibilities = DeepImageUtil::GetSampleVisibility(image, x, y);
 
-            struct AccumulatedSample {
-		V4f rgba = V4f(0,0,0,0);
-		V4f masked_rgba = V4f(0,0,0,0);
-		float mask = 0;
-                int objectId = 0;
-                float zNear = 0;
-            };
-
-            vector<AccumulatedSample> sampleLayers;
+	    // Combine samples by object ID, creating a layer for each.
 	    for(int s = 0; s < image->NumSamples(x, y); ++s)
 	    {
-                AccumulatedSample new_sample;
-                new_sample.objectId = id->Get(x, y, s);
-                new_sample.zNear = Z->Get(x, y, s);
+		float visibility = SampleVisibilities[s];
 
 		// If we have a mask, we'll multiply rgba by it to get a masked version.  However,
 		// the mask will be premultiplied by rgba[3] too.  To get the real mask value, we
@@ -146,55 +149,21 @@ void SeparateIntoAdditiveLayers(vector<Layer> &layers, shared_ptr<const DeepImag
 		float alpha = rgba->Get(x, y, s)[3];
 		float maskValue = alpha > 0.0001f? (mask->Get(x, y, s) / alpha):0;
 
-		new_sample.rgba = new_sample.masked_rgba = rgba->Get(x,y,s);
-		new_sample.masked_rgba = new_sample.rgba * maskValue;
+		V4f color = rgba->Get(x,y,s);
+		color *= visibility / color[3];
 
-                // new_sample.mask = mask->Get(x, y, s);
+		V4f masked_color = color * maskValue;
 
-                // Apply the alpha term to each sample underneath this one.
-                for(AccumulatedSample &sample: sampleLayers)
-                {
-		    sample.rgba *= 1-alpha;
-		    sample.masked_rgba *= 1-alpha;
-                    // sample.mask *= 1-alpha;
-                }
+                // float maskValue = mask->Get(x, y, s);
 
                 // Add the new sample.
-                sampleLayers.push_back(new_sample);
-            }
-
-            // Combine samples by object ID, creating a layer for each.
-            //
-            // We could do this in one pass instead of two, but debugging is easier in two passes.
-/*            for(const AccumulatedSample &sample: sampleLayers)
-            {
-                image->GetPixel(x,y).rgba += sample.rgba;
-            } */
-
-            auto getLayer = [&imagesPerObjectIdName, &layers](string layerName, int objectId, int width, int height)
-            {
-                auto it = imagesPerObjectIdName.find(layerName);
-                if(it != imagesPerObjectIdName.end())
-                    return it->second;
-
-                layers.push_back(Layer("color", width, height));
-                Layer &layer = layers.back();
-                layer.objectId = objectId;
-                layer.layerName = layerName;
-                imagesPerObjectIdName[layerName] = layer.image;
-                return layer.image;
-            };
-
-            for(const AccumulatedSample &sample: sampleLayers)
-            {
-                int objectId = sample.objectId;
+                int objectId = id->Get(x, y, s);
 
                 string layerName = getLayerName(objectId).main;
                 if(layerName != "")
                 {
                     auto out = getLayer(layerName, objectId, image->width, image->height);
-                    for(int i = 0; i < 4; ++i)
-			out->GetPixel(x,y).rgba[i] += sample.rgba[i];
+		    out->GetPixel(x,y).rgba += color;
                 }
 
                 string maskName = getLayerName(objectId).mask;
@@ -202,9 +171,9 @@ void SeparateIntoAdditiveLayers(vector<Layer> &layers, shared_ptr<const DeepImag
                 {
                     auto out = getLayer(maskName, objectId, image->width, image->height);
                     for(int i = 0; i < 4; ++i)
-			out->GetPixel(x,y).rgba[i] += sample.masked_rgba[i];
+			out->GetPixel(x,y).rgba[i] += masked_color[i];
                 }
-                //                image->GetPixel(x,y).mask += sample.mask;
+                //                image->GetPixel(x,y).mask += maskValue;
             }
         }
     }
