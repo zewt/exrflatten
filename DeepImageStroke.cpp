@@ -263,7 +263,7 @@ void DeepImageStroke::AddStroke(const DeepImageStroke::Config &config, shared_pt
 	 * However, we want to put the stroke over the shape, not underneath it, so it can go over
 	 * other stroked objects.  Deal with this by mixing the existing color over the stroke color.
 	 */
-	V4f strokeColor = V4f(config.strokeColor[0], config.strokeColor[1], config.strokeColor[2], 1) * alpha;
+	V4f strokeColor = config.strokeColor * alpha;
 	V4f topColor = mask->GetRGBA(x, y);
 	V4f mixedColor = topColor + strokeColor * (1-topColor[3]);
 

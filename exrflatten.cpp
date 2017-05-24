@@ -446,7 +446,7 @@ int main(int argc, char **argv)
 
     Config config;
     float strokeRadius = 1.0f;
-    V3f strokeColor(0,0,0);
+    V4f strokeColor(0,0,0,1);
     while(1)
     {
 	    int index = -1;

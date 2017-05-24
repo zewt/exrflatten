@@ -27,7 +27,7 @@ namespace DeepImageStroke
 	int objectId = 0;
 	float radius = 1.0f;
 	float pushTowardsCamera = 1.0f;
-	Imath::V3f strokeColor = {0,0,0};
+	Imath::V4f strokeColor = {0,0,0,1};
     };
 
     void AddStroke(const Config &config, shared_ptr<DeepImage> image);
