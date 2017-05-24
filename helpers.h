@@ -3,7 +3,27 @@
 
 #include <string>
 #include <vector>
+#include <map>
+#include <unordered_map>
 using namespace std;
+
+template<typename K, typename V, typename def>
+V map_get(const map<K,V> &m, K key, def defaultValue)
+{
+    auto iter = m.find(key);
+    if(iter != m.end())
+	return iter->second;
+    return defaultValue;
+}
+
+template<typename K, typename V, typename def>
+V map_get(const unordered_map<K,V> &m, K key, def defaultValue)
+{
+    auto iter = m.find(key);
+    if(iter != m.end())
+	return iter->second;
+    return defaultValue;
+}
 
 // Given an ordering, return a list of swaps to put a list in that order.
 // This ordering can be applied with run_swaps.

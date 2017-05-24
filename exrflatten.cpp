@@ -103,28 +103,26 @@ struct OutputFilenames
  * combine samples by object ID, and the resulting images can be added together with simple
  * additive blending.
  */
-void SeparateIntoAdditiveLayers(vector<Layer> &layers, shared_ptr<const DeepImage> image, const unordered_map<int,OutputFilenames> &objectIdNames)
+
+void SeparateIntoAdditiveLayers(
+    vector<Layer> &layers,
+    shared_ptr<const DeepImage> image,
+    const vector<int> &layerObjectIds,
+    const unordered_map<int,OutputFilenames> &objectIdNames)
 {
-    auto getLayerName = [objectIdNames](int objectId) {
-        auto it = objectIdNames.find(objectId);
-        if(it == objectIdNames.end())
-            return OutputFilenames();
-        return it->second;
-    };
+    unordered_map<int,shared_ptr<SimpleImage>> imagesPerObjectId;
 
-    unordered_map<string,shared_ptr<SimpleImage>> imagesPerObjectIdName;
-
-    auto getLayer = [&imagesPerObjectIdName, &layers](string layerName, int objectId, int width, int height)
+    auto getLayer = [&imagesPerObjectId, &layers](string layerName, int objectId, int width, int height)
     {
-	auto it = imagesPerObjectIdName.find(layerName);
-	if(it != imagesPerObjectIdName.end())
+	auto it = imagesPerObjectId.find(objectId);
+	if(it != imagesPerObjectId.end())
 	    return it->second;
 
 	layers.push_back(Layer("color", width, height));
 	Layer &layer = layers.back();
-	layer.objectId = objectId;
 	layer.layerName = layerName;
-	imagesPerObjectIdName[layerName] = layer.image;
+	layer.objectId = objectId;
+	imagesPerObjectId[objectId] = layer.image;
 	return layer.image;
     };
 
@@ -132,50 +130,174 @@ void SeparateIntoAdditiveLayers(vector<Layer> &layers, shared_ptr<const DeepImag
     auto id = image->GetChannel<uint32_t>("id");
     auto mask = image->GetChannel<float>("mask");
 
-    for(int y = 0; y < image->height; y++)
+    map<int,int> layerOrder;
+    for(int i = 0; i < layerObjectIds.size(); ++i)
+	layerOrder[layerObjectIds[i]] = i;
+
+    for(int objectId: layerObjectIds)
     {
-        for(int x = 0; x < image->width; x++)
-        {
-	    vector<float> SampleVisibilities = DeepImageUtil::GetSampleVisibility(image, x, y);
+	string layerName = map_get(objectIdNames, objectId, OutputFilenames()).main;
+	string maskName = map_get(objectIdNames, objectId, OutputFilenames()).mask;
 
-	    // Combine samples by object ID, creating a layer for each.
-	    for(int s = 0; s < image->NumSamples(x, y); ++s)
+	printf("%s...\n", layerName.c_str());
+
+	for(int y = 0; y < image->height; y++)
+	{
+	    for(int x = 0; x < image->width; x++)
 	    {
-		float visibility = SampleVisibilities[s];
+		vector<float> SampleVisibilities = DeepImageUtil::GetSampleVisibility(image, x, y);
 
-		// If we have a mask, we'll multiply rgba by it to get a masked version.  However,
-		// the mask will be premultiplied by rgba[3] too.  To get the real mask value, we
-		// need to un-premultiply it.
-		float alpha = rgba->Get(x, y, s)[3];
-		float maskValue = alpha > 0.0001f? (mask->Get(x, y, s) / alpha):0;
+		auto rgba = image->GetChannel<V4f>("rgba");
 
-		V4f color = rgba->Get(x,y,s);
-		color *= visibility / color[3];
+		// If true, this is the bottommost layer for this pixel that has any influence.
+		// If false, an earlier layer is visible underneath this one.
+		bool bottomLayer = true;
 
-		V4f masked_color = color * maskValue;
+		// Combine samples by object ID, creating a layer for each.
+		V4f color(0,0,0,0);
+		for(int s = 0; s < image->NumSamples(x, y); ++s)
+		{
+		    int actualObjectId = id->Get(x, y, s);
 
-                // float maskValue = mask->Get(x, y, s);
+		    V4f sampleColor = rgba->Get(x,y,s);
 
-                // Add the new sample.
-                int objectId = id->Get(x, y, s);
+		    // If this sample is part of this layer, composite it in.  If it's not, it still causes this
+		    // color to become less visible, so apply alpha, but don't add color.
+		    color = color*(1-sampleColor[3]);
+		    if(actualObjectId == objectId)
+			color += sampleColor;
 
-                string layerName = getLayerName(objectId).main;
-                if(layerName != "")
-                {
-                    auto out = getLayer(layerName, objectId, image->width, image->height);
-		    out->GetPixel(x,y).rgba += color;
-                }
+		    if(actualObjectId != objectId)
+		    {
+			// This is a different layer, so skip it.
+			//
+			// If this layer is below the one we're processing, and it has any visibility, then our layer isn't
+			// the bottommost visible layer.
+			if(layerOrder.at(actualObjectId) < layerOrder.at(objectId)) // only check for layers below this one
+			{
+			    float visibility = SampleVisibilities[s];
+			    if(visibility > 0.00001f)
+				bottomLayer = false;
+			}
 
-                string maskName = getLayerName(objectId).mask;
-                if(maskName != "")
-                {
-                    auto out = getLayer(maskName, objectId, image->width, image->height);
-                    for(int i = 0; i < 4; ++i)
-			out->GetPixel(x,y).rgba[i] += masked_color[i];
-                }
-                //                image->GetPixel(x,y).mask += maskValue;
-            }
-        }
+			// This sample isn't for the object ID we're processing.
+			continue;
+		    }
+
+		    // If we have a mask, we'll multiply rgba by it to get a masked version.  However,
+		    // the mask will be premultiplied by rgba[3] too.  To get the real mask value, we
+		    // need to un-premultiply it.
+		    float alpha = color[3];
+		    float maskValue = alpha > 0.0001f? (mask->Get(x, y, s) / alpha):0;
+
+		    if(x == 555 && y == 288)
+			printf("-> layer %i, %ix%i: %f %f %f %f\n", objectId, x, y,
+			    color[0],
+			    color[1],
+			    color[2],
+			    color[3]);
+
+		    if(maskName != "")
+		    {
+			V4f masked_color = color * maskValue;
+			auto maskOut = getLayer(maskName, objectId, image->width, image->height);
+			maskOut->GetPixel(x,y).rgba += masked_color;
+		    }
+		    // float maskValue = mask->Get(x, y, s);
+		    //                image->GetPixel(x,y).mask += maskValue;
+		}
+
+		// Add the new sample.
+		if(layerName != "")
+		{
+		    auto colorOut = getLayer(layerName, objectId, image->width, image->height);
+		    colorOut->GetPixel(x,y).rgba = color;
+		}
+
+		if(x == 555 && y == 288)
+		    printf("bottomLayer %i\n", bottomLayer);
+
+		if(bottomLayer)
+		{
+		    // We've set the RGBA color for this layer that will give a correct result if the image is
+		    // composited on a black background.  However, it'll be wrong if there's no background.
+		    // For example, if we have two layers with samples:
+		    //
+		    // #FF0000 alpha = 1.0
+		    // #00FF00 alpha = 0.5
+		    //
+		    // then we've created additive layers that look like this:
+		    //
+		    // #FF0000 alpha = 0.5
+		    // #00FF00 alpha = 0.5
+		    //
+		    // This gives a correct result when there's a black layer underneath, but without the black
+		    // layer the image is transparent when it should be opaque.  This makes it impossible to put
+		    // the layers on top of a different background.
+		    //
+		    // Correct this by making the bottommost visible layer more opaque.  Figure out how opaque the
+		    // image should be at this layer.
+		    // In the above case, 
+		    // since we want the whole image to be opaque
+		    // end up back at:
+		    //
+		    // #FF0000 alpha = 1.0
+		    // #00FF00 alpha = 0.5
+
+
+		    // For over compositing, we need to be careful to get the correct final alpha value.
+		    // If the whole image is opaque, the bottommost visible layer for each pixel needs to
+		    // be opaque.  This may not be the first layer.  If we have three layers, and the bottom
+		    // layer is completely covered by the other two layers somewhere, we want the second layer
+		    // to be opaque instead of the first.  That way, we'll still get correct results if the
+		    // bottom layer is hidden.  If we only made the bottom layer opaque, and the bottom layer
+		    // was hidden, the image would end up being transparent.
+
+		    // First, figure out how transparent the image should be if we look only at this layer and
+		    // the layers on top of it.
+		    float alphaUpToThisLayer = 0;
+		    for(int s = 0; s < image->NumSamples(x, y); ++s)
+		    {
+			int actualObjectId = id->Get(x, y, s);
+			if(x == 555 && y == 288)
+			    printf("check sample %i, id %i, too early: %i\n",
+				s, actualObjectId, layerOrder.at(actualObjectId) < layerOrder.at(objectId));
+
+			if(layerOrder.at(actualObjectId) < layerOrder.at(objectId))
+			    continue;
+
+			float alpha = rgba->Get(x,y,s)[3];
+
+			alphaUpToThisLayer = alphaUpToThisLayer*(1-alpha) + alpha;
+		    }
+		    if(x == 555 && y == 288)
+		    {
+			printf("id %i, alpha from here: %f\n", objectId, alphaUpToThisLayer);
+		    }
+
+		    auto colorOut = map_get(imagesPerObjectId, objectId, nullptr);
+		    if(colorOut == nullptr)
+			continue;
+
+		    V4f &color = colorOut->GetPixel(x,y).rgba;
+		    float alpha = color[3];
+
+		    if(x == 555 && y == 288)
+			printf("from: %f %f %f %f\n",
+			    color[0], color[1], color[2], color[3]);
+
+		    if(alpha > 0.00001f)
+		    {
+			color[3] /= alpha;
+			color[3] *= alphaUpToThisLayer;
+			if(x == 555 && y == 288)
+			    printf("result: %f %f %f %f\n",
+				color[0], color[1], color[2], color[3]);
+		    }
+		}
+
+	    }
+	}
     }
 }
 
@@ -210,6 +332,7 @@ struct Config
 {
     string inputFilename;
     string outputPattern;
+    bool outputAdditiveLayers = false;
 
     vector<DeepImageStroke::Config> strokes;
 
@@ -355,13 +478,39 @@ bool FlattenFiles::flatten(const Config &config)
     if(!config.strokes.empty())
 	DeepImageUtil::SortSamplesByDepth(image);
 
+    // XXX: need a way to specify the layer order
+    vector<int> layerObjectIds = {0, 1000, 1001};
+
     // Combine layers.  This just changes the object IDs of samples, so we don't need to re-sort.
     for(auto combine: config.combines)
+    {
 	DeepImageUtil::CombineObjectId(image, combine.second, combine.first);
+
+	// Remove the layer we merged from layerObjectIds, so we don't waste time trying to create
+	// a layer for it.
+	auto it = find(layerObjectIds.begin(), layerObjectIds.end(), combine.second);
+	if(it != layerObjectIds.end())
+	    layerObjectIds.erase(it, it+1);
+    }
 
     // Separate the image into layers.
     vector<Layer> layers;
-    SeparateIntoAdditiveLayers(layers, image, objectIdNames);
+    SeparateIntoAdditiveLayers(layers, image, layerObjectIds, objectIdNames);
+
+    if(!config.outputAdditiveLayers)
+    {
+	// Convert the additive layers to equivalent over layers.
+	vector<shared_ptr<SimpleImage>> blendedLayers;
+	sort(layers.begin(), layers.end(), [&layerObjectIds](const Layer &lhs, const Layer &rhs) {
+	    auto it1 = find(layerObjectIds.begin(), layerObjectIds.end(), lhs.objectId);
+	    auto it2 = find(layerObjectIds.begin(), layerObjectIds.end(), rhs.objectId);
+	    return it1 < it2;
+	});
+
+	for(auto &layer: layers)
+	    blendedLayers.push_back(layer.image);
+	SimpleImage::ConvertAdditiveLayersToOver(blendedLayers);
+    }
 
     shared_ptr<SimpleImage> flat = DeepImageUtil::CollapseEXR(image);
     layers.push_back(Layer("color", image->width, image->height));
@@ -428,7 +577,9 @@ int main(int argc, char **argv)
 	    case 0:
 	    {
 		    string opt = opts[index].name;
-		    if(opt == "stroke")
+		    if(opt == "add")
+			config.outputAdditiveLayers = true;
+		    else if(opt == "stroke")
 		    {
 			config.strokes.emplace_back();
 			config.strokes.back().objectId = atoi(optarg);
