@@ -398,11 +398,9 @@ bool FlattenFiles::flatten(const Config &config)
     layers.back().layerName = "main";
     layers.back().image = flat;
 
-    // Write the results.
-    for(int i = 0; i < layers.size(); ++i)
+    // Write the layers.
+    for(const auto &layer: layers)
     {
-        auto &layer = layers[i];
-
         // Copy all image attributes, except for built-in EXR headers that we shouldn't set.
 	DeepImageUtil::CopyLayerAttributes(image->header, layer.image->header);
 
