@@ -1,11 +1,13 @@
 #include "DeepImageUtil.h"
 #include "SimpleImage.h"
+#include "helpers.h"
 
 #include <algorithm>
 #include <OpenEXR/ImathVec.h>
 
 using namespace Imf;
 using namespace Imath;
+
 
 // Flatten the color channels of a deep EXR to a simple flat layer.
 shared_ptr<SimpleImage> DeepImageUtil::CollapseEXR(shared_ptr<const DeepImage> image, set<int> objectIds)
@@ -87,7 +89,9 @@ void DeepImageUtil::SortSamplesByDepth(shared_ptr<DeepImage> image)
 {
     const auto Z = image->GetChannel<float>("Z");
 
+    // Keep these outside the loop, since reallocating these for every pixel is slow.
     vector<int> order;
+    vector<pair<int,int>> swaps;
     for(int y = 0; y < image->height; y++)
     {
 	for(int x = 0; x < image->width; x++)
@@ -105,10 +109,14 @@ void DeepImageUtil::SortSamplesByDepth(shared_ptr<DeepImage> image)
 		return lhsZNear > rhsZNear;
 	    });
 
+	    make_swaps(order, swaps);
+	    if(swaps.empty())
+		continue;
+
 	    for(auto it: image->channels)
 	    {
 		shared_ptr<DeepImageChannel> &channel = it.second;
-		channel->Reorder(x, y, order);
+		channel->Reorder(x, y, swaps);
 	    }
 	}
     }

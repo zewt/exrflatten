@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <assert.h>
 
+#include "helpers.h"
+
 using namespace std;
 using namespace Imf;
 using namespace Imath;
@@ -58,15 +60,9 @@ TypedDeepImageChannel<T>::~TypedDeepImageChannel()
 }
 
 template<typename T>
-void TypedDeepImageChannel<T>::Reorder(int x, int y, const vector<int> &order)
+void TypedDeepImageChannel<T>::Reorder(int x, int y, const vector<pair<int,int>> &swaps)
 {
-    T *newValues = new T[order.size()];
-
-    for(int i = 0; i < order.size(); ++i)
-	newValues[i] = data[y][x][order[i]];
-
-    delete[] data[y][x];
-    data[y][x] = newValues;
+    run_swaps(data[y][x], swaps);
 }
 
 template<typename T>

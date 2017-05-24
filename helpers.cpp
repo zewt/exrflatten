@@ -1,7 +1,36 @@
+#include "helpers.h"
 #include <stdarg.h>
 
 #include <string>
 using namespace std;
+
+void make_swaps(vector<int> order, vector<pair<int,int>> &swaps)
+{
+    // order[0] is the index in the old list of the new list's first value.
+    // Invert the mapping: inverse[0] is the index in the new list of the
+    // old list's first value.
+    vector<int> inverse(order.size());
+    for(int i = 0; i < order.size(); ++i)
+	inverse[order[i]] = i;
+
+    swaps.resize(0);
+
+    for(int idx1 = 0; idx1 < order.size(); ++idx1)
+    {
+	// Swap list[idx] with list[order[idx]], and record this swap.
+	int idx2 = order[idx1];
+	if(idx1 == idx2)
+	    continue;
+
+	swaps.push_back(make_pair(idx1, idx2));
+
+	// list[idx1] is now in the correct place, but whoever wanted the value we moved out
+	// of idx2 now needs to look in its new position.
+	int idx1_dep = inverse[idx1];
+	order[idx1_dep] = idx2;
+	inverse[idx2] = idx1_dep;
+    }
+}
 
 string vssprintf(const char *fmt, va_list va)
 {

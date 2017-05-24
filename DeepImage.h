@@ -21,7 +21,7 @@ public:
     }
 
     virtual void AddToFramebuffer(string name, const Imf::Header &header, Imf::DeepFrameBuffer &frameBuffer, int channel = 0) = 0;
-    virtual void Reorder(int x, int y, const vector<int> &order) = 0;
+    virtual void Reorder(int x, int y, const vector<pair<int,int>> &order) = 0;
     virtual void AddSample(int x, int y, int count) = 0;
 };
 
@@ -37,9 +37,9 @@ public:
     // The sample stride is the number of bytes from one sample to the next: sizeof(T).
     void AddToFramebuffer(string name, const Imf::Header &header, Imf::DeepFrameBuffer &frameBuffer, int channel = 0);
 
-    // Reorder our data to the given order.  If order is { 2, 1, 0 }, we'll reverse the
-    // order.
-    void Reorder(int x, int y, const vector<int> &order);
+    // Reorder our data to the given order.  swaps is a list of swaps (see make_swaps
+    // and run_swaps).
+    void Reorder(int x, int y, const vector<pair<int,int>> &swaps);
 
     // Add an empty sample to the end of the list for the given pixel.
     void AddSample(int x, int y, int count);
