@@ -35,8 +35,6 @@ void SimpleImage::ApplyMask()
 
 void SimpleImage::WriteEXR(string filename) const
 {
-    printf("Writing: %s\n", filename.c_str());
-
     Header headerCopy(header);
     headerCopy.channels().insert("R", Channel(FLOAT));
     headerCopy.channels().insert("G", Channel(FLOAT));

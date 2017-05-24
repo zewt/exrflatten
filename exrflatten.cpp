@@ -375,6 +375,7 @@ bool FlattenFiles::flatten(const Config &config)
 	DeepImageUtil::CopyLayerAttributes(image->header, layer.image->header);
 
         string outputName = MakeOutputFilename(config, config.outputPattern, layer, layer.layerName);
+	printf("Writing %i: %s\n", layer.objectId, outputName.c_str());
 
         try {
             layer.image->WriteEXR(outputName);
