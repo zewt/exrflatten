@@ -123,6 +123,8 @@ void SeparateIntoAdditiveLayers(vector<Layer> &layers, shared_ptr<const DeepImag
     {
         for(int x = 0; x < image->width; x++)
         {
+	    vector<float> SampleVisibilities = DeepImageUtil::GetSampleVisibility(image, x, y);
+
             struct AccumulatedSample {
 		V4f rgba = V4f(0,0,0,0);
 		V4f masked_rgba = V4f(0,0,0,0);
@@ -164,10 +166,9 @@ void SeparateIntoAdditiveLayers(vector<Layer> &layers, shared_ptr<const DeepImag
             // Combine samples by object ID, creating a layer for each.
             //
             // We could do this in one pass instead of two, but debugging is easier in two passes.
-            const int pixelIdx = x + y*image->width;
 /*            for(const AccumulatedSample &sample: sampleLayers)
             {
-                image->data[pixelIdx].rgba += sample.rgba;
+                image->GetPixel(x,y).rgba += sample.rgba;
             } */
 
             auto getLayer = [&imagesPerObjectIdName, &layers](string layerName, int objectId, int width, int height)
@@ -193,7 +194,7 @@ void SeparateIntoAdditiveLayers(vector<Layer> &layers, shared_ptr<const DeepImag
                 {
                     auto out = getLayer(layerName, objectId, image->width, image->height);
                     for(int i = 0; i < 4; ++i)
-			out->data[pixelIdx].rgba[i] += sample.rgba[i];
+			out->GetPixel(x,y).rgba[i] += sample.rgba[i];
                 }
 
                 string maskName = getLayerName(objectId).mask;
@@ -201,9 +202,9 @@ void SeparateIntoAdditiveLayers(vector<Layer> &layers, shared_ptr<const DeepImag
                 {
                     auto out = getLayer(maskName, objectId, image->width, image->height);
                     for(int i = 0; i < 4; ++i)
-			out->data[pixelIdx].rgba[i] += sample.masked_rgba[i];
+			out->GetPixel(x,y).rgba[i] += sample.masked_rgba[i];
                 }
-                //                image->data[pixelIdx].mask += sample.mask;
+                //                image->GetPixel(x,y).mask += sample.mask;
             }
         }
     }
