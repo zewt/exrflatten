@@ -267,6 +267,10 @@ void DeepImageStroke::AddStroke(const DeepImageStroke::Config &config, shared_pt
 	V4f topColor = mask->GetRGBA(x, y);
 	V4f mixedColor = topColor + strokeColor * (1-topColor[3]);
 
+	// Don't add an empty sample.
+	if(mixedColor[3] <= 0.00001f)
+	    return;
+
 	// Add a sample for the stroke.
 	image->AddSample(x, y);
 
