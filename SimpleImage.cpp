@@ -24,15 +24,6 @@ void SimpleImage::SetColor(V4f color)
     }
 }
 
-void SimpleImage::ApplyMask()
-{
-    for(int y = 0; y < height; y++)
-    {
-        for(int x = 0; x < width; x++)
-	    GetPixel(x, y).rgba *= GetPixel(x, y).mask;
-    }
-}
-
 void SimpleImage::WriteEXR(string filename) const
 {
     Header headerCopy(header);
@@ -42,10 +33,10 @@ void SimpleImage::WriteEXR(string filename) const
     headerCopy.channels().insert("A", Channel(FLOAT));
 
     FrameBuffer frameBuffer;
-    frameBuffer.insert("R", Slice(FLOAT, (char *) &data.data()->rgba[0], sizeof(pixel), sizeof(pixel) * width));
-    frameBuffer.insert("G", Slice(FLOAT, (char *) &data.data()->rgba[1], sizeof(pixel), sizeof(pixel) * width));
-    frameBuffer.insert("B", Slice(FLOAT, (char *) &data.data()->rgba[2], sizeof(pixel), sizeof(pixel) * width));
-    frameBuffer.insert("A", Slice(FLOAT, (char *) &data.data()->rgba[3], sizeof(pixel), sizeof(pixel) * width));
+    frameBuffer.insert("R", Slice(FLOAT, (char *) &(data[0].x), sizeof(V4f), sizeof(V4f) * width));
+    frameBuffer.insert("G", Slice(FLOAT, (char *) &(data[0].y), sizeof(V4f), sizeof(V4f) * width));
+    frameBuffer.insert("B", Slice(FLOAT, (char *) &(data[0].z), sizeof(V4f), sizeof(V4f) * width));
+    frameBuffer.insert("A", Slice(FLOAT, (char *) &(data[0].w), sizeof(V4f), sizeof(V4f) * width));
 
     OutputFile file(filename.c_str(), headerCopy);
     file.setFrameBuffer(frameBuffer);
@@ -62,13 +53,13 @@ void SimpleImage::ConvertAdditiveLayersToOver(vector<shared_ptr<SimpleImage>> &l
 	{
 	    for(int x = 0; x < lowerLayerColor->width; x++)
 	    {
-		float alphaBeforeCompositing = lowerLayerColor->GetPixel(x,y).rgba[3];
+		float alphaBeforeCompositing = lowerLayerColor->GetRGBA(x,y)[3];
 		if(alphaBeforeCompositing < 0.0001f)
 		    continue;
 
 		// Figure out how much influence this layer actually has.  This is the alpha value, with all of
 		// the layers on top composited over which reduce its actual influence.
-		float alphaAfterCompositing = lowerLayerColor->GetPixel(x,y).rgba[3];
+		float alphaAfterCompositing = lowerLayerColor->GetRGBA(x,y)[3];
 		for(int upperLayerIdx = lowerLayerIdx+1; upperLayerIdx < layers.size(); ++upperLayerIdx)
 		{
 		    shared_ptr<const SimpleImage> upperLayerColor = layers[upperLayerIdx];
@@ -77,7 +68,7 @@ void SimpleImage::ConvertAdditiveLayersToOver(vector<shared_ptr<SimpleImage>> &l
 		    // is applied.  We want the alpha to stay the same, so the final contribution stays the
 		    // same.  Adjust alpha so the final output has the same value it did before adding this
 		    // new layer.
-		    float upperAlpha = upperLayerColor->GetPixel(x,y).rgba[3];
+		    float upperAlpha = upperLayerColor->GetRGBA(x,y)[3];
 		    alphaAfterCompositing *= 1-upperAlpha;
 		}
 
@@ -91,7 +82,7 @@ void SimpleImage::ConvertAdditiveLayersToOver(vector<shared_ptr<SimpleImage>> &l
 		// 2.0 to restore the expected visibility.  Note that we don't multiply alpha.
 		float adjustment = alphaBeforeCompositing / alphaAfterCompositing;
 
-		V4f &lowerColor = lowerLayerColor->GetPixel(x,y).rgba;
+		V4f &lowerColor = lowerLayerColor->GetRGBA(x,y);
 		for(int i = 0; i < 3; ++i)
 		    lowerColor[i] *= adjustment;
 	    }
