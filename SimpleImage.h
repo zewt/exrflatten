@@ -30,15 +30,6 @@ public:
     void SetColor(Imath::V4f color);
 
     void WriteEXR(string filename) const;
-
-    /*
-     * Given a list of layers intended for additive blending, modify them to give the same result
-     * using normal ("over") blending.
-     *
-     * The layer order isn't significant with additive blending, but it is with normal blending.
-     * The layers must be composited in the order given.
-     */
-    static void ConvertAdditiveLayersToOver(vector<shared_ptr<SimpleImage>> &layers);
 };
 
 #endif
