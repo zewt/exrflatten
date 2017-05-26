@@ -168,8 +168,9 @@ void SeparateLayer(
 
 struct Config
 {
-    string inputFilename;
-    string outputPattern;
+    vector<string> inputFilenames;
+    string outputPath = "";
+    string outputPattern = "<inputname> <ordername> <layer>.exr";
 
     struct LayerDesc
     {
@@ -191,13 +192,12 @@ struct Config
     vector<pair<int,int>> combines;
 };
 
-void ReadConfigFromHeader(const Header &header, Config &config)
+bool ParseConfig(Config &config, string opt, string value)
 {
-    const StringAttribute *layers = header.findTypedAttribute<StringAttribute>("flatten/layers");
-    if(layers)
+    if(opt == "layers")
     {
 	vector<string> layerParts;
-	split(layers->value(), ";", layerParts);
+	split(value, ";", layerParts);
 
 	for(string layerDesc: layerParts)
 	{
@@ -215,13 +215,12 @@ void ReadConfigFromHeader(const Header &header, Config &config)
 	    layer.layerName = descParts[1];
 	    config.layers.push_back(layer);
 	}
+	return true;
     }
-
-    const StringAttribute *masks = header.findTypedAttribute<StringAttribute>("flatten/masks");
-    if(masks)
+    else if(opt == "masks")
     {
 	vector<string> maskParts;
-	split(masks->value(), ";", maskParts);
+	split(value, ";", maskParts);
 
 	for(string maskDesc: maskParts)
 	{
@@ -239,6 +238,39 @@ void ReadConfigFromHeader(const Header &header, Config &config)
 	    mask.maskChannel = descParts[0];
 	    config.masks.push_back(mask);
 	}
+	return true;
+    }
+    else if(opt == "combine")
+    {
+	const char *split = strchr(optarg, ',');
+	if(split == NULL)
+	{
+	    printf("Invalid --combine (ignored)\n");
+	    return true;
+	}
+
+	int dst = atoi(optarg);
+	int src = atoi(split+1);
+	config.combines.push_back(make_pair(dst, src));
+    }
+
+    return false;
+}
+
+void ReadConfigFromHeader(const Header &header, Config &config)
+{
+    for(auto it = header.begin(); it != header.end(); ++it)
+    {
+	string name = it.name();
+	if(name.substr(0, 8) != "flatten/")
+	    continue;
+	string argName = name.substr(8);
+
+	auto attr = dynamic_cast<const StringAttribute *>(&it.attribute());
+	if(attr == nullptr)
+	    continue;
+
+	ParseConfig(config, argName, attr->value());
     }
 }
 
@@ -246,7 +278,7 @@ namespace FlattenFiles
 {
     bool flatten(Config config);
     string GetFrameNumberFromFilename(string s);
-    string MakeOutputFilename(const Config &config, string output, const Layer &layer);
+    string MakeOutputFilename(const Config &config, const Layer &layer);
 };
 
 
@@ -265,13 +297,23 @@ string FlattenFiles::GetFrameNumberFromFilename(string s)
 }
 
 // Do simple substitutions on the output filename.
-string FlattenFiles::MakeOutputFilename(const Config &config, string output, const Layer &layer)
+string FlattenFiles::MakeOutputFilename(const Config &config, const Layer &layer)
 {
-    string outputName = output;
+    string outputName = config.outputPattern;
+    if(!config.outputPath.empty())
+	outputName = config.outputPath + "/" + outputName;
+
+    const string originalOutputName = outputName;
 
     // <name>: the name of the object ID that we got from the EXR file, or "#100" if we
     // only have a number.
     outputName = subst(outputName, "<name>", layer.layerName);
+
+    string orderName = "";
+    if(layer.order > 0)
+	orderName += ssprintf("#%i ", layer.order);
+    orderName += layer.layerName;
+    outputName = subst(outputName, "<ordername>", orderName);
 
     // <layer>: the output layer that we generated.  This is currently always "color".
     outputName = subst(outputName, "<layer>", layer.layerType);
@@ -281,17 +323,17 @@ string FlattenFiles::MakeOutputFilename(const Config &config, string output, con
     outputName = subst(outputName, "<order>", ssprintf("%i", layer.order));
 
     // <inputname>: the input filename, with the directory and ".exr" removed.
-    string inputName = config.inputFilename;
+    string inputName = config.inputFilenames[0];
     inputName = basename(inputName);
     inputName = setExtension(inputName, "");
     outputName = subst(outputName, "<inputname>", inputName);
 
     // <frame>: the input filename's frame number, given a "abcdef.1234.exr" filename.
     // It would be nice if there was an EXR attribute contained the frame number.
-    outputName = subst(outputName, "<frame>", GetFrameNumberFromFilename(config.inputFilename));
+    outputName = subst(outputName, "<frame>", GetFrameNumberFromFilename(config.inputFilenames[0]));
 
     static bool warned = false;
-    if(!warned && outputName == output)
+    if(!warned && outputName == originalOutputName)
     {
         // If the output filename hasn't changed, there are no substitutions in it, which
         // means we'll write a single file over and over.  That's probably not what was
@@ -306,37 +348,51 @@ string FlattenFiles::MakeOutputFilename(const Config &config, string output, con
 
 bool FlattenFiles::flatten(Config config)
 {
-    shared_ptr<DeepImage> image;
-    try {
-	DeepImageReader reader;
-	image = reader.Open(config.inputFilename);
-
-	// Read any parts of the configuration that are stored in the header.
-	ReadConfigFromHeader(image->header, config);
-
-	// Set up the channels we're interested in.
-	DeepFrameBuffer frameBuffer;
-	image->AddSampleCountSliceToFramebuffer(frameBuffer);
-	image->AddChannelToFramebuffer<V4f>("rgba", {"R", "G", "B", "A"}, frameBuffer);
-	image->AddChannelToFramebuffer<uint32_t>("id", {"id"}, frameBuffer);
-	image->AddChannelToFramebuffer<float>("Z", { "Z" }, frameBuffer);
-	image->AddChannelToFramebuffer<float>("ZBack", {"ZBack"}, frameBuffer);
-	image->AddChannelToFramebuffer<V3f>("P", { "P.X", "P.Y", "P.Z" }, frameBuffer);
-	image->AddChannelToFramebuffer<V3f>("N", { "N.X", "N.Y", "N.Z" }, frameBuffer);
-
-	// Also read channels used by masks.
-	for(auto maskDesc: config.masks)
-	    image->AddChannelToFramebuffer<float>(maskDesc.maskChannel, { maskDesc.maskChannel }, frameBuffer);
-
-	reader.Read(frameBuffer);
-    }
-    catch(const BaseExc &e)
+    vector<shared_ptr<DeepImage>> images;
+    for(string inputFilename: config.inputFilenames)
     {
-        // We don't include the filename here because OpenEXR's exceptions include the filename.
-        // (Unfortunately, the errors are also formatted awkwardly...)
-        fprintf(stderr, "%s\n", e.what());
-        return false;
+	try {
+	    shared_ptr<DeepImage> image;
+
+	    DeepImageReader reader;
+	    image = reader.Open(inputFilename);
+
+	    // Read any parts of the configuration that are stored in the header.
+	    if(images.empty())
+		ReadConfigFromHeader(image->header, config);
+
+	    // Set up the channels we're interested in.
+	    DeepFrameBuffer frameBuffer;
+	    image->AddSampleCountSliceToFramebuffer(frameBuffer);
+	    image->AddChannelToFramebuffer<V4f>("rgba", {"R", "G", "B", "A"}, frameBuffer);
+	    image->AddChannelToFramebuffer<uint32_t>("id", {"id"}, frameBuffer);
+	    image->AddChannelToFramebuffer<float>("Z", { "Z" }, frameBuffer);
+	    image->AddChannelToFramebuffer<float>("ZBack", {"ZBack"}, frameBuffer);
+	    image->AddChannelToFramebuffer<V3f>("P", { "P.X", "P.Y", "P.Z" }, frameBuffer);
+	    image->AddChannelToFramebuffer<V3f>("N", { "N.X", "N.Y", "N.Z" }, frameBuffer);
+
+	    // Also read channels used by masks.
+	    for(auto maskDesc: config.masks)
+		image->AddChannelToFramebuffer<float>(maskDesc.maskChannel, { maskDesc.maskChannel }, frameBuffer);
+
+	    reader.Read(frameBuffer);
+	    images.push_back(image);
+	}
+	catch(const BaseExc &e)
+	{
+	    // We don't include the filename here because OpenEXR's exceptions include the filename.
+	    // (Unfortunately, the errors are also formatted awkwardly...)
+	    fprintf(stderr, "%s\n", e.what());
+	    return false;
+	}
     }
+
+    // Combine the images.
+    shared_ptr<DeepImage> image;
+    if(images.size() == 1)
+	image = images[0];
+    else
+	image = DeepImageUtil::CombineImages(images);
 
     // Sort all samples by depth.  If we want to support volumes, this is where we'd do the rest
     // of "tidying", splitting samples where they overlap using splitVolumeSample.
@@ -382,6 +438,9 @@ bool FlattenFiles::flatten(Config config)
 	DeepImageUtil::CombineObjectId(image, combine.second, combine.first);
 
 	// Remove the layer we merged, so we don't waste time trying to create a layer for it.
+	// Note that we do this after creating layerOrder.  We want to avoid creating the layer,
+	// but leave the empty space in the layer ordering so filenames don't change if combining
+	// is changed.
 	layerOrder.erase(combine.second);
     }
 
@@ -404,22 +463,27 @@ bool FlattenFiles::flatten(Config config)
 
     // Separate the image into layers.
     vector<Layer> layers;
-    int nextOrder = 0;
-    auto getLayer = [&layers, &nextOrder](string layerName, string layerType, int width, int height)
+    int nextOrder = 1;
+    auto getLayer = [&layers, &nextOrder](string layerName, string layerType, int width, int height, bool ordered)
     {
 	layers.push_back(Layer(width, height));
 	Layer &layer = layers.back();
 	layer.layerName = layerName;
 	layer.layerType = layerType;
-	layer.order = nextOrder++;
+	if(ordered)
+	    layer.order = nextOrder++;
 	return layer.image;
     };
 
     for(auto layerDesc: config.layers)
     {
+	// Skip this layer if we've removed it from layerOrder.
+	if(layerOrder.find(layerDesc.objectId) == layerOrder.end())
+	    continue;
+
 	string layerName = layerDesc.layerName;
 
-	auto colorOut = getLayer(layerName, "color", image->width, image->height);
+	auto colorOut = getLayer(layerName, "color", image->width, image->height, true);
 	SeparateLayer(layerDesc.objectId, colorOut, image, layerOrder, nullptr);
 
 	for(auto maskDesc: config.masks)
@@ -427,7 +491,7 @@ bool FlattenFiles::flatten(Config config)
 	    auto mask = image->GetChannel<float>(maskDesc.maskChannel);
 	    if(mask)
 	    {
-		auto maskOut = getLayer(layerName, maskDesc.maskName, image->width, image->height);
+		auto maskOut = getLayer(layerName, maskDesc.maskName, image->width, image->height, false);
 		SeparateLayer(layerDesc.objectId, maskOut, image, layerOrder, mask);
     	    }
 	}
@@ -452,7 +516,7 @@ bool FlattenFiles::flatten(Config config)
 	// Copy all image attributes, except for built-in EXR headers that we shouldn't set.
 	DeepImageUtil::CopyLayerAttributes(image->header, layer.image->header);
 
-        string outputName = MakeOutputFilename(config, config.outputPattern, layer);
+        string outputName = MakeOutputFilename(config, layer);
 	printf("Writing %s\n", outputName.c_str());
 
         try {
@@ -473,6 +537,11 @@ int main(int argc, char **argv)
 	{"stroke-radius", required_argument, NULL, 0},
 	{"stroke", required_argument, NULL, 0},
 	{"combine", required_argument, NULL, 0},
+	{"input", required_argument, NULL, 'i'},
+	{"output", required_argument, NULL, 'o'},
+	{"filename", required_argument, NULL, 'f'},
+	{"layers", required_argument, NULL, 0},
+	{"masks", required_argument, NULL, 0},
 	{0},
     };
 
@@ -482,49 +551,47 @@ int main(int argc, char **argv)
     while(1)
     {
 	    int index = -1;
-	    int c = getopt_long(argc, argv, "", opts, &index);
+	    int c = getopt_long(argc, argv, "i:o:f:", opts, &index);
 	    if( c == -1 )
 		    break;
 	    switch( c )
 	    {
 	    case 0:
 	    {
-		    string opt = opts[index].name;
-		    if(opt == "stroke")
-		    {
-			config.strokes.emplace_back();
-			config.strokes.back().objectId = atoi(optarg);
-			config.strokes.back().radius = strokeRadius;
-			config.strokes.back().strokeColor = strokeColor;
-		    }
-		    else if(opt == "stroke-radius")
-		    {
-			strokeRadius = (float) atof(optarg);
-		    }
-		    else if(opt == "combine")
-		    {
-			const char *split = strchr(optarg, ',');
-			if(split == NULL)
-			{
-			    printf("Invalid --combine (ignored)\n");
-			    break;
-			}
+		string opt = opts[index].name;
+		if(ParseConfig(config, opt, optarg? optarg:""))
+		    ;
+		else if(opt == "stroke")
+		{
+		    config.strokes.emplace_back();
+		    config.strokes.back().objectId = atoi(optarg);
+		    config.strokes.back().radius = strokeRadius;
+		    config.strokes.back().strokeColor = strokeColor;
 
-			int dst = atoi(optarg);
-			int src = atoi(split+1);
-			config.combines.push_back(make_pair(dst, src));
-		    }
+		    // config.strokes.back().outputObjectId = 1500;
+		}
+		else if(opt == "stroke-radius")
+		{
+		    strokeRadius = (float) atof(optarg);
+		}
+		break;
 	    }
+	    case 'i':
+		config.inputFilenames.push_back(optarg);
+		break;
+	    case 'o':
+		config.outputPath = optarg;
+		break;
+	    case 'f':
+		config.outputPattern = optarg;
+		break;
 	    }
     }
 
-    if(argc < optind + 1) {
-	    fprintf(stderr, "Usage: exrflatten [--combine src,dst ...] input.exr output\n");
-	    return 1;
+    if(config.inputFilenames.empty()) {
+	fprintf(stderr, "Usage: exrflatten [--combine src,dst ...] -i input.exr [-i input2.exr ...] [-o output path] [-f filename pattern.exr]\n");
+	return 1;
     }
-
-    config.inputFilename = argv[optind];
-    config.outputPattern = argv[optind+1];
 
     if(!FlattenFiles::flatten(config))
         return 1;

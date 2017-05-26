@@ -23,6 +23,8 @@ public:
     virtual void AddToFramebuffer(string name, const Imf::Header &header, Imf::DeepFrameBuffer &frameBuffer, int channel = 0) = 0;
     virtual void Reorder(int x, int y, const vector<pair<int,int>> &order) = 0;
     virtual void AddSample(int x, int y, int count) = 0;
+    virtual DeepImageChannel *CreateSameType(const Imf::Array2D<unsigned int> &sampleCount) const = 0;
+    virtual void CopySamples(shared_ptr<const DeepImageChannel> OtherChannel, int x, int y, int firstIdx) = 0;
 };
 
 template<typename T>
@@ -81,6 +83,14 @@ public:
 	int last = sampleCount[y][x]-1;
 	return data[y][x][last];
     }
+
+    // Return a new, empty TypedDeepImageChannel of this type, with a new sampleCount.
+    TypedDeepImageChannel<T> *CreateSameType(const Imf::Array2D<unsigned int> &sampleCount) const;
+
+    // Copy all samples from OtherChannel.  The samples will be output starting at firstIdx.
+    // OtherChannel must have the same templated type as this object, and there must be enough
+    // samples allocated to hold the copied samples.
+    void CopySamples(shared_ptr<const DeepImageChannel> OtherChannel, int x, int y, int firstIdx);
 
     int width, height;
     Imf::Array2D<T *> data;

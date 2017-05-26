@@ -50,6 +50,25 @@ TypedDeepImageChannel<T>::TypedDeepImageChannel(int width_, int height_, const A
 }
 
 template<typename T>
+TypedDeepImageChannel<T> *TypedDeepImageChannel<T>::CreateSameType(const Array2D<unsigned int> &sampleCount) const
+{
+    return new TypedDeepImageChannel<T>(width, height, sampleCount);
+}
+
+template<typename T>
+void TypedDeepImageChannel<T>::CopySamples(shared_ptr<const DeepImageChannel> OtherChannel, int x, int y, int firstIdx)
+{
+    shared_ptr<const TypedDeepImageChannel<T>> TypedOtherChannel = dynamic_pointer_cast<const TypedDeepImageChannel<T>>(OtherChannel);
+    if(TypedOtherChannel == nullptr)
+	return;
+
+    const T *src = TypedOtherChannel->GetSamples(x, y);
+    T *dst = this->GetSamples(x, y);
+    for(int s = 0; s < TypedOtherChannel->sampleCount[y][x]; ++s)
+	dst[s + firstIdx] = src[s];
+}
+
+template<typename T>
 TypedDeepImageChannel<T>::~TypedDeepImageChannel()
 {
     for(int y = 0; y < data.height(); y++)

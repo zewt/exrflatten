@@ -140,3 +140,51 @@ vector<float> DeepImageUtil::GetSampleVisibility(shared_ptr<const DeepImage> ima
     }
     return result;
 }
+
+shared_ptr<DeepImage> DeepImageUtil::CombineImages(vector<shared_ptr<DeepImage>> images)
+{
+    shared_ptr<DeepImage> result = make_shared<DeepImage>(images[0]->width, images[0]->height);
+    DeepImageUtil::CopyLayerAttributes(images[0]->header, result->header);
+
+    // Sum up the sampleCount for all images.
+    Array2D<unsigned int> &totalSampleCount = result->sampleCount;
+    for(int y = 0; y < result->height; y++)
+    {
+	for(int x = 0; x < result->width; x++)
+	{
+	    result->sampleCount[y][x] = 0;
+	    for(auto image: images)
+		result->sampleCount[y][x] += image->sampleCount[y][x];
+	}
+    }
+
+    for(auto it: images[0]->channels)
+    {
+	// Create the combined channel for the new image.  CreateSameType will create a
+	// channel of the same type as the existing channel.
+	string channelName = it.first;
+	shared_ptr<const DeepImageChannel> channel = it.second;
+	shared_ptr<DeepImageChannel> newChannel(channel->CreateSameType(result->sampleCount));
+	result->channels[channelName] = newChannel;
+
+	// Copy samples from each input image.
+	for(int y = 0; y < result->height; y++)
+	{
+	    for(int x = 0; x < result->width; x++)
+	    {
+		int nextSample = 0;
+		for(auto image: images)
+		{
+		    shared_ptr<const DeepImageChannel> srcChannel = map_get(image->channels, channelName, nullptr);
+		    if(srcChannel == nullptr)
+			continue;
+
+		    newChannel->CopySamples(srcChannel, x, y, nextSample);
+		    nextSample += image->sampleCount[y][x];
+		}
+	    }
+	}
+    }
+
+    return result;
+}

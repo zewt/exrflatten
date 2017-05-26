@@ -11,6 +11,8 @@ using namespace std;
 class SimpleImage;
 
 namespace DeepImageUtil {
+    const int NO_OBJECT_ID = 0;
+
     // Flatten the color channels of a deep EXR to a simple flat layer.
     shared_ptr<SimpleImage> CollapseEXR(shared_ptr<const DeepImage> image, set<int> objectIds = {});
 
@@ -30,7 +32,8 @@ namespace DeepImageUtil {
     // samples on top of it, and the final visibility is { 0.25, 0.25, 0.5 }.
     vector<float> GetSampleVisibility(shared_ptr<const DeepImage> image, int x, int y);
 
-    const int NO_OBJECT_ID = 0;
+    // Copy all samples from all channels of images into a single image.
+    shared_ptr<DeepImage> CombineImages(vector<shared_ptr<DeepImage>> images);
 }
 
 #endif
