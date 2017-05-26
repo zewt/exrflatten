@@ -43,3 +43,12 @@ void SimpleImage::WriteEXR(string filename) const
     file.writePixels(height);
 }
 
+bool SimpleImage::IsEmpty() const
+{
+    for(int y = 0; y < height; y++)
+	for(int x = 0; x < width; x++)
+	    if(GetRGBA(x, y)[3] > 0.0001)
+		return false;
+
+    return true;
+}

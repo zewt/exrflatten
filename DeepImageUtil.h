@@ -30,10 +30,7 @@ namespace DeepImageUtil {
     // samples on top of it, and the final visibility is { 0.25, 0.25, 0.5 }.
     vector<float> GetSampleVisibility(shared_ptr<const DeepImage> image, int x, int y);
 
-    // Try to work around bad Arnold default IDs.  If you don't explicitly specify an object ID,
-    // Arnold seems to write uninitialized memory or some other random-looking data to it.
     const int NO_OBJECT_ID = 0;
-    void ReplaceHighObjectIds(shared_ptr<DeepImage> image);
 }
 
 #endif

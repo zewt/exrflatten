@@ -52,18 +52,13 @@ struct Layer
 {
     string layerName;
     string layerType;
+    int order = 0;
     shared_ptr<SimpleImage> image;
 
     Layer(int width, int height)
     {
         image = make_shared<SimpleImage>(width, height);
     }
-};
-
-struct OutputFilenames
-{
-    string main;
-    string mask;
 };
 
 /*
@@ -171,37 +166,24 @@ void SeparateLayer(
     }
 }
 
-void readObjectIdNames(const Header &header, unordered_map<int,OutputFilenames> &objectIdNames)
-{
-    for(auto it = header.begin(); it != header.end(); ++it)
-    {
-        auto &attr = it.attribute();
-        if(strcmp(attr.typeName(), "string"))
-            continue;
-
-        string headerName = it.name();
-        if(headerName.substr(0, 9) == "ObjectId/")
-        {
-            string idString = headerName.substr(9);
-            int id = atoi(idString.c_str());
-            const StringAttribute &value = dynamic_cast<const StringAttribute &>(attr);
-            objectIdNames[id].main = value.value();
-        }
-        else if(headerName.substr(0, 5) == "Mask/")
-        {
-            string idString = headerName.substr(5);
-            int id = atoi(idString.c_str());
-
-            const StringAttribute &value = dynamic_cast<const StringAttribute &>(attr);
-            objectIdNames[id].mask = value.value();
-        }
-    }
-}
-
 struct Config
 {
     string inputFilename;
     string outputPattern;
+
+    struct LayerDesc
+    {
+	string layerName;
+	int objectId;
+    };
+    vector<LayerDesc> layers;
+
+    struct MaskDesc
+    {
+	string maskChannel;
+	string maskName;
+    };
+    vector<MaskDesc> masks;
 
     vector<DeepImageStroke::Config> strokes;
 
@@ -209,9 +191,60 @@ struct Config
     vector<pair<int,int>> combines;
 };
 
+void ReadConfigFromHeader(const Header &header, Config &config)
+{
+    const StringAttribute *layers = header.findTypedAttribute<StringAttribute>("flatten/layers");
+    if(layers)
+    {
+	vector<string> layerParts;
+	split(layers->value(), ";", layerParts);
+
+	for(string layerDesc: layerParts)
+	{
+	    // id=name
+	    vector<string> descParts;
+	    split(layerDesc, "=", descParts);
+	    if(descParts.size() != 2)
+	    {
+		printf("Warning: ignored part of layer desc \"%s\"\n", layerDesc.c_str());
+		continue;
+	    }
+
+	    Config::LayerDesc layer;
+	    layer.objectId = atoi(descParts[0].c_str());
+	    layer.layerName = descParts[1];
+	    config.layers.push_back(layer);
+	}
+    }
+
+    const StringAttribute *masks = header.findTypedAttribute<StringAttribute>("flatten/masks");
+    if(masks)
+    {
+	vector<string> maskParts;
+	split(masks->value(), ";", maskParts);
+
+	for(string maskDesc: maskParts)
+	{
+	    // channel=mask name
+	    vector<string> descParts;
+	    split(maskDesc, "=", descParts);
+	    if(descParts.size() != 2)
+	    {
+		printf("Warning: ignored part of mask desc \"%s\"\n", maskDesc.c_str());
+		continue;
+	    }
+
+	    Config::MaskDesc mask;
+	    mask.maskName = descParts[1];
+	    mask.maskChannel = descParts[0];
+	    config.masks.push_back(mask);
+	}
+    }
+}
+
 namespace FlattenFiles
 {
-    bool flatten(const Config &config);
+    bool flatten(Config config);
     string GetFrameNumberFromFilename(string s);
     string MakeOutputFilename(const Config &config, string output, const Layer &layer);
 };
@@ -243,6 +276,10 @@ string FlattenFiles::MakeOutputFilename(const Config &config, string output, con
     // <layer>: the output layer that we generated.  This is currently always "color".
     outputName = subst(outputName, "<layer>", layer.layerType);
 
+    // <order>: the order this layer should be composited.  Putting this early in the
+    // filename makes filenames sort in comp order, which can be convenient.
+    outputName = subst(outputName, "<order>", ssprintf("%i", layer.order));
+
     // <inputname>: the input filename, with the directory and ".exr" removed.
     string inputName = config.inputFilename;
     inputName = basename(inputName);
@@ -267,14 +304,15 @@ string FlattenFiles::MakeOutputFilename(const Config &config, string output, con
     return outputName;
 }
 
-bool FlattenFiles::flatten(const Config &config)
+bool FlattenFiles::flatten(Config config)
 {
-    unordered_map<int,OutputFilenames> objectIdNames;
-
     shared_ptr<DeepImage> image;
     try {
 	DeepImageReader reader;
 	image = reader.Open(config.inputFilename);
+
+	// Read any parts of the configuration that are stored in the header.
+	ReadConfigFromHeader(image->header, config);
 
 	// Set up the channels we're interested in.
 	DeepFrameBuffer frameBuffer;
@@ -283,9 +321,12 @@ bool FlattenFiles::flatten(const Config &config)
 	image->AddChannelToFramebuffer<uint32_t>("id", {"id"}, frameBuffer);
 	image->AddChannelToFramebuffer<float>("Z", { "Z" }, frameBuffer);
 	image->AddChannelToFramebuffer<float>("ZBack", {"ZBack"}, frameBuffer);
-	image->AddChannelToFramebuffer<float>("mask", { "mask" }, frameBuffer);
 	image->AddChannelToFramebuffer<V3f>("P", { "P.X", "P.Y", "P.Z" }, frameBuffer);
 	image->AddChannelToFramebuffer<V3f>("N", { "N.X", "N.Y", "N.Z" }, frameBuffer);
+
+	// Also read channels used by masks.
+	for(auto maskDesc: config.masks)
+	    image->AddChannelToFramebuffer<float>(maskDesc.maskChannel, { maskDesc.maskChannel }, frameBuffer);
 
 	reader.Read(frameBuffer);
     }
@@ -297,48 +338,31 @@ bool FlattenFiles::flatten(const Config &config)
         return false;
     }
 
-    DeepImageUtil::ReplaceHighObjectIds(image);
-
-    //const ChannelList &channels = image->header.channels();
-    //for(auto i = channels.begin(); i != channels.end(); ++i)
-    //    printf("Channel %s has type %i\n", i.name(), i.channel().type);
-
-#if 0
-    set<string> layerNames;
-    channels.layers(layerNames);
-    for(const string &layerName: layerNames)
-    {
-        printf("layer: %s", layerName.c_str());
-        ChannelList::ConstIterator layerBegin, layerEnd;
-        channels.channelsInLayer(layerName, layerBegin, layerEnd);
-        for(auto j = layerBegin; j != layerEnd; ++j)
-        {
-            cout << "\tchannel " << j.name() << endl;
-        }
-    }
-#endif
-
     // Sort all samples by depth.  If we want to support volumes, this is where we'd do the rest
     // of "tidying", splitting samples where they overlap using splitVolumeSample.
     DeepImageUtil::SortSamplesByDepth(image);
 
-    // If this file has names for object IDs, read them.
-    readObjectIdNames(image->header, objectIdNames);
-
-    // Set the layer with the object ID 0 to "default", unless a name for that ID
-    // was specified explicitly.
-    if(objectIdNames.find(DeepImageUtil::NO_OBJECT_ID) == objectIdNames.end())
-	objectIdNames[DeepImageUtil::NO_OBJECT_ID].main = "default";
-
+    // If no layer was specified for the default object ID, add one at the beginning.
+    bool hasDefaultObjectId = false;
+    for(auto layer: config.layers)
+	if(layer.objectId == DeepImageUtil::NO_OBJECT_ID)
+	    hasDefaultObjectId = true;
+    if(!hasDefaultObjectId)
+    {
+	Config::LayerDesc layerDesc;
+	layerDesc.objectId = 0;
+	layerDesc.layerName = "default";
+	config.layers.insert(config.layers.begin(), layerDesc);
+    }
     
-/*    if(!objectIdNames.empty())
+/*    if(!config.layers.empty())
     {
         printf("Object ID names:\n");
-        for(auto it: objectIdNames)
-            printf("Id %i: %s\n", it.first, it.second.c_str());
+        for(auto layer: config.layers)
+            printf("Id %i: %s\n", layer.objectId, layer.layerName.c_str());
         printf("\n");
-    } */
-
+    }
+*/
     // Apply strokes to layers.
     for(auto stroke: config.strokes)
 	DeepImageStroke::AddStroke(stroke, image);
@@ -347,25 +371,17 @@ bool FlattenFiles::flatten(const Config &config)
     if(!config.strokes.empty())
 	DeepImageUtil::SortSamplesByDepth(image);
 
-    // XXX: need a way to specify the layer order
-//    vector<int> layerObjectIds = {0, 1, 2, 3};
-    vector<int> layerObjectIds = {0, 1000, 1001, 1002};
-
     map<int,int> layerOrder;
-    for(int i = 0; i < layerObjectIds.size(); ++i)
-	layerOrder[layerObjectIds[i]] = i;
+    int next = 0;
+    for(auto layer: config.layers)
+	layerOrder[layer.objectId] = next++;
 
     // Combine layers.  This just changes the object IDs of samples, so we don't need to re-sort.
     for(auto combine: config.combines)
     {
 	DeepImageUtil::CombineObjectId(image, combine.second, combine.first);
 
-	// Remove the layer we merged from layerObjectIds, so we don't waste time trying to create
-	// a layer for it.
-	auto it = find(layerObjectIds.begin(), layerObjectIds.end(), combine.second);
-	if(it != layerObjectIds.end())
-	    layerObjectIds.erase(it, it+1);
-
+	// Remove the layer we merged, so we don't waste time trying to create a layer for it.
 	layerOrder.erase(combine.second);
     }
 
@@ -388,33 +404,33 @@ bool FlattenFiles::flatten(const Config &config)
 
     // Separate the image into layers.
     vector<Layer> layers;
-    auto getLayer = [&layers](string layerName, string layerType, int width, int height)
+    int nextOrder = 0;
+    auto getLayer = [&layers, &nextOrder](string layerName, string layerType, int width, int height)
     {
 	layers.push_back(Layer(width, height));
 	Layer &layer = layers.back();
 	layer.layerName = layerName;
 	layer.layerType = layerType;
+	layer.order = nextOrder++;
 	return layer.image;
     };
 
-    for(int objectId: layerObjectIds)
+    for(auto layerDesc: config.layers)
     {
-	OutputFilenames filenames = map_get(objectIdNames, objectId, OutputFilenames());
-	if(filenames.main == "")
-	    filenames.main = "foo";
-	if(filenames.main != "")
-	{
-	    string layerName = filenames.main;
-	    auto colorOut = getLayer(layerName, "color", image->width, image->height);
-	    SeparateLayer(objectId, colorOut, image, layerOrder, nullptr);
-	}
+	string layerName = layerDesc.layerName;
 
-	auto mask = image->GetChannel<float>("mask");
-	if(filenames.mask != "" && mask)
+	auto colorOut = getLayer(layerName, "color", image->width, image->height);
+	SeparateLayer(layerDesc.objectId, colorOut, image, layerOrder, nullptr);
+
+	for(auto maskDesc: config.masks)
 	{
-	    auto maskOut = getLayer(filenames.mask, "mask", image->width, image->height);
-	    SeparateLayer(objectId, maskOut, image, layerOrder, mask);
-    	}
+	    auto mask = image->GetChannel<float>(maskDesc.maskChannel);
+	    if(mask)
+	    {
+		auto maskOut = getLayer(layerName, maskDesc.maskName, image->width, image->height);
+		SeparateLayer(layerDesc.objectId, maskOut, image, layerOrder, mask);
+    	    }
+	}
     }
 
     for(const auto &layer: layers)
@@ -429,7 +445,11 @@ bool FlattenFiles::flatten(const Config &config)
     // Write the layers.
     for(const auto &layer: layers)
     {
-        // Copy all image attributes, except for built-in EXR headers that we shouldn't set.
+	// Don't write this layer if it's completely empty.
+	if(layer.image->IsEmpty())
+	    continue;
+	
+	// Copy all image attributes, except for built-in EXR headers that we shouldn't set.
 	DeepImageUtil::CopyLayerAttributes(image->header, layer.image->header);
 
         string outputName = MakeOutputFilename(config, config.outputPattern, layer);
@@ -509,8 +529,8 @@ int main(int argc, char **argv)
     if(!FlattenFiles::flatten(config))
         return 1;
 
-//    char buf[1024];
-//    fgets(buf, 1000, stdin);
+    char buf[1024];
+    fgets(buf, 1000, stdin);
     return 0;
 }
 

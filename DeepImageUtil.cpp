@@ -140,20 +140,3 @@ vector<float> DeepImageUtil::GetSampleVisibility(shared_ptr<const DeepImage> ima
     }
     return result;
 }
-
-void DeepImageUtil::ReplaceHighObjectIds(shared_ptr<DeepImage> image)
-{
-    auto id = image->GetChannel<uint32_t>("id");
-
-    for(int y = 0; y < image->height; y++)
-    {
-	for(int x = 0; x < image->width; x++)
-	{
-	    for(int s = 0; s < image->sampleCount[y][x]; ++s)
-	    {
-		if(id->Get(x,y,s) > 1000000)
-		    id->Get(x,y,s) = NO_OBJECT_ID;
-	    }
-	}
-    }
-}

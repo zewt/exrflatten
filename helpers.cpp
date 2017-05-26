@@ -70,6 +70,63 @@ string subst(string s, string from, string to)
     return s;
 }
 
+template <class S>
+static int DelimitorLength( const S &Delimitor )
+{
+    return Delimitor.size();
+}
+
+static int DelimitorLength( char Delimitor )
+{
+    return 1;
+}
+
+static int DelimitorLength( wchar_t Delimitor )
+{
+    return 1;
+}
+
+template <class S, class C>
+void do_split(const S &source, const C delimitor, vector<S> &result, const bool ignoreEmpty)
+{
+    /* Short-circuit if the source is empty; we want to return an empty vector if
+     * the string is empty, even if bIgnoreEmpty is true. */
+    if(source.empty())
+	return;
+
+    size_t startpos = 0;
+
+    do {
+	size_t pos;
+	pos = source.find(delimitor, startpos);
+	if(pos == source.npos)
+	    pos = source.size();
+
+	if(pos-startpos > 0 || !ignoreEmpty)
+	{
+	    /* Optimization: if we're copying the whole string, avoid substr; this
+	     * allows this copy to be refcounted, which is much faster. */
+	    if(startpos == 0 && pos-startpos == source.size())
+		result.push_back(source);
+	    else
+	    {
+		const S Addstring = source.substr(startpos, pos-startpos);
+		result.push_back(Addstring);
+	    }
+	}
+
+	startpos = pos+DelimitorLength(delimitor);
+    } while(startpos <= source.size());
+}
+
+void split(const string &source, const string &delimitor, vector<string> &result, const bool ignoreEmpty)
+{
+    if(delimitor.size() == 1)
+	do_split(source, delimitor[0], result, ignoreEmpty);
+    else
+	do_split(source, delimitor, result, ignoreEmpty);
+}
+
 /*
  * Return the last named component of dir:
  * a/b/c -> c

@@ -45,5 +45,6 @@ string ssprintf(const char *fmt, ...);
 string subst(string s, string from, string to);
 string basename(const string &dir);
 string setExtension(string path, const string &ext);
+void split(const string &source, const string &delimitor, vector<string> &result, const bool ignoreEmpty=true);
 
 #endif

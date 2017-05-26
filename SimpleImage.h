@@ -30,6 +30,9 @@ public:
     void SetColor(Imath::V4f color);
 
     void WriteEXR(string filename) const;
+
+    // Return true if this image is completely transparent.
+    bool IsEmpty() const;
 };
 
 #endif
