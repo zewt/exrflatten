@@ -253,6 +253,11 @@ bool ParseConfig(Config &config, string opt, string value)
 	int src = atoi(split+1);
 	config.combines.push_back(make_pair(dst, src));
     }
+    else if(opt == "stroke")
+    {
+	config.strokes.emplace_back();
+	config.strokes.back().ParseOptionsString(optarg);
+    }
 
     return false;
 }
@@ -534,7 +539,6 @@ bool FlattenFiles::flatten(Config config)
 int main(int argc, char **argv)
 {
     option opts[] = {
-	{"stroke-radius", required_argument, NULL, 0},
 	{"stroke", required_argument, NULL, 0},
 	{"combine", required_argument, NULL, 0},
 	{"input", required_argument, NULL, 'i'},
@@ -546,8 +550,6 @@ int main(int argc, char **argv)
     };
 
     Config config;
-    float strokeRadius = 1.0f;
-    V4f strokeColor(0,0,0,1);
     while(1)
     {
 	    int index = -1;
@@ -557,25 +559,8 @@ int main(int argc, char **argv)
 	    switch( c )
 	    {
 	    case 0:
-	    {
-		string opt = opts[index].name;
-		if(ParseConfig(config, opt, optarg? optarg:""))
-		    ;
-		else if(opt == "stroke")
-		{
-		    config.strokes.emplace_back();
-		    config.strokes.back().objectId = atoi(optarg);
-		    config.strokes.back().radius = strokeRadius;
-		    config.strokes.back().strokeColor = strokeColor;
-
-		    // config.strokes.back().outputObjectId = 1500;
-		}
-		else if(opt == "stroke-radius")
-		{
-		    strokeRadius = (float) atof(optarg);
-		}
+		ParseConfig(config, opts[index].name, optarg? optarg:"");
 		break;
-	    }
 	    case 'i':
 		config.inputFilenames.push_back(optarg);
 		break;
@@ -596,8 +581,8 @@ int main(int argc, char **argv)
     if(!FlattenFiles::flatten(config))
         return 1;
 
-    char buf[1024];
-    fgets(buf, 1000, stdin);
+//    char buf[1024];
+//    fgets(buf, 1000, stdin);
     return 0;
 }
 

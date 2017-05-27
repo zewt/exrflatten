@@ -6,6 +6,8 @@
 
 #include <OpenEXR/ImfArray.h>
 #include <OpenEXR/ImathVec.h>
+#include <OpenEXR/ImathMatrix.h>
+#include <OpenEXR/ImfMatrixAttribute.h>
 
 using namespace std;
 using namespace Imf;
@@ -13,6 +15,7 @@ using namespace Imath;
 
 #include "DeepImageUtil.h"
 #include "SimpleImage.h"
+#include "Helpers.h"
 
 namespace EuclideanMetric
 {
@@ -72,21 +75,7 @@ void DeepImageStroke::CalculateDistance(
 	    //g[y][x] = min(g[y][x], d);
 	}
     }
-    /*
-    for(int y = 0; y < min(height, 10); ++y)
-    {
-	for(int x = 0; x < min(width, 10); ++x)
-	    printf("%.0f ", GetMask(x, y));
-	printf("\n");
-    }
 
-    for(int y = 0; y < min(height, 10); ++y)
-    {
-	for(int x = 0; x < min(width, 10); ++x)
-	    printf("%3.0f ", g[y][x] * (g_up[y][x]?-1:+1));
-	printf("\n");
-    }
-    */
     // phase 2
     for(int y = 0; y < height; ++y)
     {
@@ -145,52 +134,38 @@ void DeepImageStroke::CalculateDistance(
     }
 }
 
-float DeepImageStroke::DistanceAndRadiusToAlpha(float distance, float radius)
+float DeepImageStroke::DistanceAndRadiusToAlpha(float distance, const Config &config)
 {
     // At 0, we're completely inside the shape.  Don't draw the stroke at all.
     if(distance <= 0)
 	return 0;
 
-    // We're fully visible up to the radius.  Note that we don't fade the inside edge
-    // of the stroke.  That's handled by comping the stroke underneath the shape, so
-    // the antialiasing of the shape blends on top of the stroke.
-    if(distance < radius)
-	return 1;
-
-    // Fade off for one pixel.  XXX: make this configurable
-    if(distance < radius+1)
-    {
-	float outsideFade = distance - radius;
-	return 1 - outsideFade;
-    }
-
-    // We're completely outside the stroke.
-    return 0;
+    // Note that we don't fade the inside edge of the stroke.  That's handled by comping
+    // the stroke underneath the shape, so the antialiasing of the shape blends on top
+    // of the stroke.
+    return scale_clamp(distance, config.radius, config.radius+config.fade, 1.0f, 0.0f);
 }
 
-void DeepImageStroke::AddStroke(const DeepImageStroke::Config &config, shared_ptr<DeepImage> image)
+void DeepImageStroke::ApplyStrokeUsingMask(const DeepImageStroke::Config &config, shared_ptr<DeepImage> image, shared_ptr<SimpleImage> mask)
 {
-    // Flatten the image.  We'll use this as the mask to create the stroke.
-    shared_ptr<SimpleImage> mask = DeepImageUtil::CollapseEXR(image, { config.objectId });
-
-    // Find closest sample (for our object ID) to the camera for each point.
-    Array2D<int> NearestSample;
-    NearestSample.resizeErase(image->height, image->width);
-
     auto rgba = image->GetChannel<V4f>("rgba");
     auto id = image->GetChannel<uint32_t>("id");
     auto ZBack = image->GetChannel<float>("ZBack");
     auto Z = image->GetChannel<float>("Z");
 
+    // Find closest sample (for our object ID) to the camera for each point.
+    Array2D<int> NearestSample;
+    NearestSample.resizeErase(image->height, image->width);
+
     for(int y = 0; y < image->height; y++)
     {
-        for(int x = 0; x < image->width; x++)
-        {
+	for(int x = 0; x < image->width; x++)
+	{
 	    int &nearest = NearestSample[y][x];
 	    nearest = -1;
 
 	    for(int s = 0; s < image->NumSamples(x,y); ++s)
-            {
+	    {
 		if(id->Get(x,y,s) != config.objectId)
 		    continue;
 
@@ -205,6 +180,7 @@ void DeepImageStroke::AddStroke(const DeepImageStroke::Config &config, shared_pt
 	}
     }
 
+
     // Calculate a stroke for the flattened image, and insert the stroke as deep samples, so
     // it'll get composited at the correct depth, allowing it to be obscured.
     CalculateDistance(mask->width, mask->height,
@@ -218,7 +194,7 @@ void DeepImageStroke::AddStroke(const DeepImageStroke::Config &config, shared_pt
 	
 	return result;
     }, [&](int x, int y, int sx, int sy, float distance) {
-	float alpha = DistanceAndRadiusToAlpha(distance, config.radius);
+	float alpha = DistanceAndRadiusToAlpha(distance, config);
 
 	// Don't add an empty sample.
 	if(alpha <= 0.00001f)
@@ -264,8 +240,45 @@ void DeepImageStroke::AddStroke(const DeepImageStroke::Config &config, shared_pt
 	 * However, we want to put the stroke over the shape, not underneath it, so it can go over
 	 * other stroked objects.  Deal with this by mixing the existing color over the stroke color.
 	 */
+	/*
+	const vector<float> &visibilities = SampleVisibilities[y][x];
+
+	if(x == 607 && y == 181)
+	{
+	    printf("x %ix%i -> %ix%i\n", x, y, sx, sy);
+	    for(int s = 0; s < image->NumSamples(x,y); ++s)
+	    {
+		if(id->Get(x,y,s) != config.objectId)
+		    continue;
+
+//		V3f world = P->Get(x, y, s);
+		V4f c = rgba->Get(x, y, s);
+//		world /= c[3];
+		float depth = Z->Get(x,y,s);
+
+		printf("-> %f (%f), %f %f %f %f (v %f)\n", depth, SourceSampleDistance,
+		    c[0], c[1], c[2], c[3], visibilities[s]);
+	    }
+	}
+	*/
+
+#if 1
+	V4f topColor(0,0,0,0);
+	for(int s = 0; s < image->NumSamples(x, y); ++s)
+	{
+	    float depth = Z->Get(x,y,s);
+	    if(depth > SourceSampleDistance + 0.0001f + config.pushTowardsCamera)
+		continue;
+
+	    V4f c = rgba->Get(x,y,s);
+	    topColor = topColor*(1-c[3]);
+
+	    if(id->Get(x,y,s) == config.objectId)
+		topColor += c;
+	}
+
 	V4f strokeColor = config.strokeColor * alpha;
-	V4f topColor = mask->GetRGBA(x, y);
+	//V4f topColor = mask->GetRGBA(x, y);
 	V4f mixedColor = topColor + strokeColor * (1-topColor[3]);
 
 	// Don't add an empty sample.
@@ -278,8 +291,244 @@ void DeepImageStroke::AddStroke(const DeepImageStroke::Config &config, shared_pt
 	rgba->GetLast(x,y) = mixedColor;
 	Z->GetLast(x,y) = zDistance;
 	ZBack->GetLast(x,y) = zDistance;
+	id->GetLast(x,y) = config.outputObjectId != -1? config.outputObjectId:config.objectId;
+#else
+	V4f strokeColor = config.strokeColor * alpha;
+	image->AddSample(x, y);
+	rgba->GetLast(x,y) = strokeColor;
+	Z->GetLast(x,y) = zDistance;
+	ZBack->GetLast(x,y) = zDistance;
 	id->GetLast(x,y) = config.objectId;
+#endif
     });
+}
+
+// Create an intersection mask that can be used to create a stroke.  This generates a mask
+// which is set for pixels that neighbor pixels further away.  What we're really looking
+// for is mesh discontinuities: neighboring pixels which are from two different places
+// and not a continuous object.
+shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageStroke::Config &config, shared_ptr<const DeepImage> image)
+{
+    shared_ptr<SimpleImage> mask = make_shared<SimpleImage>(image->width, image->height);
+
+    // Create a mask using simple edge detection.
+    auto rgba = image->GetChannel<V4f>("rgba");
+    auto id = image->GetChannel<uint32_t>("id");
+    auto Z = image->GetChannel<float>("Z");
+    auto P = image->GetChannel<V3f>("P");
+    auto N = image->GetChannel<V3f>("N");
+
+    Array2D<vector<float>> SampleVisibilities;
+    SampleVisibilities.resizeErase(image->height, image->width);
+    for(int y = 0; y < image->height; y++)
+    {
+	for(int x = 0; x < image->width; x++)
+	    SampleVisibilities[y][x] = DeepImageUtil::GetSampleVisibility(image, x, y);
+    }
+
+    for(int y = 0; y < image->height; y++)
+    {
+	for(int x = 0; x < image->width; x++)
+	{
+	    if(!image->NumSamples(x,y))
+		continue;
+
+	    float maxDistance = 0;
+
+	    static const vector<pair<int,int>> directions = {
+		//{ -1, -1 },
+		{  0, -1 },
+		//{ +1, -1 },
+		{ -1,  0 },
+		//{  0,  0 },
+		{ +1,  0 },
+		//{ -1, +1 },
+		{  0, +1 },
+		//{ +1, +1 },
+	    };
+
+	    const vector<float> &visibilities = SampleVisibilities[y][x];
+#define TEST_X 479
+#define TEST_Y 221
+
+	    // Compare this pixel to each of the bordering pixels.
+	    for(const auto &dir: directions)
+	    {
+		int x2 = x + dir.first;
+		int y2 = y + dir.second;
+		if(x2 < 0 || y2 < 0 || x2 >= image->width || y2 >= image->height)
+		    continue;
+
+		// Compare the depth of each sample in (x,y) to each sample in (x2,y2).
+		float totalDifference = 0;
+		for(int s1 = 0; s1 < image->NumSamples(x,y); ++s1)
+		{
+		    if(id->Get(x,y,s1) != config.objectId)
+			continue;
+
+		    // Skip this sample if it's completely occluded.
+		    float sampleVisibility1 = SampleVisibilities[y][x][s1];
+		    if(sampleVisibility1 < 0.001f)
+			continue;
+
+		    float depth1 = Z->Get(x, y, s1);
+		    float alpha1 = rgba->Get(x, y, s1)[3];
+
+		    // We're dividing the world space position by alpha to work around an Arnold
+		    // bug causing vector passes to be "premultiplied" as if they're colors.
+		    V3f world1 = P->Get(x, y, s1) / alpha1;
+		    // V3f normal1 = N->Get(x, y, s1).normalized();
+
+		    for(int s2 = 0; s2 < image->NumSamples(x2,y2); ++s2)
+		    {
+			if(id->Get(x2,y2,s2) != config.objectId)
+			    continue;
+
+			// Skip this sample if it's completely occluded.
+			float sampleVisibility2 = SampleVisibilities[y2][x2][s2];
+			if(sampleVisibility2 < 0.001f)
+			    continue;
+
+			// Don't clear this pixel if it's further away than the source, so we clear
+			// pixels within the nearer object and not the farther one.
+			float depth2 = Z->Get(x2, y2, s2);
+			if(depth2 < depth1) // XXX
+			    continue;
+
+			float alpha2 = rgba->Get(x2, y2, s2)[3];
+			V3f world2 = P->Get(x2, y2, s2) / alpha2;
+
+			// V3f normal2 = N->Get(x2, y2, s2).normalized();
+			// float angle = acosf(normal1.dot(normal2)) * 180 / M_PI;
+
+			// Find the world space distance between these two samples.
+			float distance = (world2 - world1).length();
+
+			/* if(x == TEST_X && y == TEST_Y)
+			{
+			    printf("distance (%+ix%+i) between %ix%i sample %i and %ix%i sample %i: %f (vis %f, %f)\n",
+				dir.first, dir.second,
+				x, y, s1, x2, y2, s2, distance,
+				sampleVisibility1, sampleVisibility2);
+			} */
+
+//			float result = angle;
+			float result = distance;
+			// Scale by the visibility of both samples.  This way, the total scale of all
+			// sample comparisons when we add them up will be even, no matter how many samples
+			// we have.
+			result *= sampleVisibility1 * sampleVisibility2;
+
+			// When the nearer sample is referenceDistance away from the camera, we look
+			// for differences of depth of intersectionMinDepth.  If the sample is twice as far away,
+			// we require the depth to be twice as much.  This accounts for the fact that objects
+			// which are further away have fewer pixels on screen, so samples further apart
+			// are closer together.  If we don't do this, we'll be too aggressive in detecting
+			// contours for far away objects.
+			float referenceDistance = 1000.0f;
+			float depthScale = scale(depth1, referenceDistance, referenceDistance*2, 1.0f, 2.0f);
+
+			// Scale depth from the depth range to 0-1.
+			result = scale(result,
+			     config.intersectionMinDepth*depthScale,
+			    (config.intersectionMinDepth+config.intersectionFade) * depthScale, 0.0f, 1.0f);
+
+			// Clamp to 0-1 now that we're in unit range.  It's important that
+			// we do this before applying sampleVisibility1 below, or else a very
+			// big depth value like 100 can have an overly large effect: we want
+			// to clamp to 1 then apply coverage.
+			result = min(max(result, 0.0f), 1.0f);
+
+			// Scale by the visibility of the pixel we're testing.  (This doubles the
+			// sampleVisibility1 scale since we applied it above for a different reason.)
+			// This is where we apply coverage: more transparent pixels should be more
+			// transparent in the mask.
+			result *= sampleVisibility1;
+
+			totalDifference += result;
+		    }
+		}
+
+		// If this is a corner sample, reduce its effect based on the distance to the
+		// pixel we're testing.
+		float screenDistance = (V2f((float) x, (float) y) - V2f((float) x2, (float) y2)).length();
+		if(screenDistance >= 1)
+		    totalDifference *= 1/screenDistance;
+
+		maxDistance = max(maxDistance, totalDifference);
+	    }
+
+	    mask->GetRGBA(x,y) = V4f(1,1,1,1) * maxDistance;
+	}
+    }
+
+    return mask;
+}
+
+void DeepImageStroke::AddStroke(const DeepImageStroke::Config &config, shared_ptr<DeepImage> image)
+{
+    // Flatten the image.  We'll use this as the mask to create the stroke.  Don't
+    // actually apply the stroke until we deal with contours, so we don't apply contours
+    // to strokes.
+    shared_ptr<SimpleImage> outlineMask = DeepImageUtil::CollapseEXR(image, { config.objectId });
+
+    // Create the contour mask.  It's important that we do this before applying the stroke.
+    shared_ptr<SimpleImage> contourMask;
+    if(config.strokeIntersections)
+	contourMask = CreateIntersectionMask(config, image);
+
+    //mask->WriteEXR("test.exr");
+
+    // Apply the regular stroke and the contour stroke.
+    ApplyStrokeUsingMask(config, image, outlineMask);
+    if(config.strokeIntersections)
+	ApplyStrokeUsingMask(config, image, contourMask);
+}
+
+V4f ParseColor(const string &str)
+{
+    int ir=255, ib=255, ig=255, ia=255;
+    int result = sscanf( str.c_str(), "#%2x%2x%2x%2x", &ir, &ig, &ib, &ia );
+    if(result < 3)
+	return V4f(1,1,1,1);
+
+    V4f rgba;
+    rgba[0] = (float) ir; rgba[1] = (float) ig; rgba[2] = (float) ib;
+    if( result == 4 )
+	rgba[3] = (float) ia;
+    else
+	rgba[3] = 255;
+    rgba /= 255;
+    return rgba;
+}
+
+// --stroke="id=1000;radius=1;color=#000000;intersections;intersection-min-depth=1;intersection-fade=1;"
+void DeepImageStroke::Config::ParseOptionsString(string optionsString)
+{
+    vector<string> options;
+    split(optionsString, ";", options);
+    for(string option: options)
+    {
+	vector<string> args;
+	split(option, "=", args);
+	if(args.size() < 1)
+	    continue;
+
+	if(args[0] == "id" && args.size() > 1)
+	    objectId = atoi(args[1].c_str());
+	else if(args[0] == "radius" && args.size() > 1)
+	    radius = (float) atof(args[1].c_str());
+	else if(args[0] == "fade" && args.size() > 1)
+	    fade = (float) atof(args[1].c_str());
+	else if(args[0] == "color" && args.size() > 1)
+	    strokeColor = ParseColor(args[1]);
+	else if(args[0] == "intersections")
+	    strokeIntersections = true;
+	else if(args[0] == "intersection-min-depth")
+	    this->intersectionMinDepth = (float) atof(args[1].c_str());
+	else if(args[0] == "intersection-fade")
+	    this->intersectionFade = (float) atof(args[1].c_str());
+    }
 }
 
 /*

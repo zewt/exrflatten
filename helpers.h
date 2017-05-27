@@ -47,4 +47,26 @@ string basename(const string &dir);
 string setExtension(string path, const string &ext);
 void split(const string &source, const string &delimitor, vector<string> &result, const bool ignoreEmpty=true);
 
+template<typename T>
+T clamp(T value, T low, T high)
+{
+    // If low and high are flipped, correct it.  This happens for eg.
+    // scale_clamp(value, 0, 1, 1, 0).
+    T low1 = min(low, high);
+    T high1 = max(low, high);
+    return min(max(value, low1), high1);
+}
+
+template<typename T>
+T scale(T value, T l1, T h1, T l2, T h2)
+{
+    return (value - l1) * (h2 - l2) / (h1 - l1) + l2;
+}
+
+template<typename T>
+T scale_clamp(T value, T l1, T h1, T l2, T h2)
+{
+    return ::clamp(scale(value, l1, h1, l2, h2), l2, h2);
+}
+
 #endif
