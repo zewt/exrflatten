@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <OpenEXR/ImathVec.h>
+#include "DeepImage.h"
 
 using namespace std;
 
@@ -19,6 +20,8 @@ namespace DeepImageStroke
 	int objectId = 0;
 	int outputObjectId = -1;
 	float radius = 1.0f;
+
+	string strokeMaskChannel, intersectionMaskChannel;
 
 	// The distance to fade out the stroke outside of radius.  If radius is 1 and
 	// fade is 5, the stroke will be solid for 1 pixel and then fade out over the
@@ -43,7 +46,8 @@ namespace DeepImageStroke
     float DistanceAndRadiusToAlpha(float distance, const Config &config);
 
     void AddStroke(const Config &config, shared_ptr<DeepImage> image);
-    shared_ptr<SimpleImage> CreateIntersectionMask(const DeepImageStroke::Config &config, shared_ptr<const DeepImage> image);
+    shared_ptr<SimpleImage> CreateIntersectionMask(const DeepImageStroke::Config &config,
+	shared_ptr<const DeepImage> image, shared_ptr<const TypedDeepImageChannel<float>> imageMask);
     void ApplyStrokeUsingMask(const DeepImageStroke::Config &config, shared_ptr<DeepImage> image, shared_ptr<SimpleImage> mask);
 }
 

@@ -6,6 +6,7 @@
 using namespace std;
 
 #include <OpenEXR/ImfHeader.h>
+#include <OpenEXR/ImathVec.h>
 
 #include "DeepImage.h"
 class SimpleImage;
@@ -14,7 +15,7 @@ namespace DeepImageUtil {
     const int NO_OBJECT_ID = 0;
 
     // Flatten the color channels of a deep EXR to a simple flat layer.
-    shared_ptr<SimpleImage> CollapseEXR(shared_ptr<const DeepImage> image, set<int> objectIds = {});
+    shared_ptr<SimpleImage> CollapseEXR(shared_ptr<const DeepImage> image, shared_ptr<const TypedDeepImageChannel<float>> mask = nullptr, set<int> objectIds = {});
 
     // Change all samples with an object ID of fromObjectId to intoObjectId.
     void CombineObjectId(shared_ptr<DeepImage> image, int fromObjectId, int intoObjectId);
@@ -34,6 +35,31 @@ namespace DeepImageUtil {
 
     // Copy all samples from all channels of images into a single image.
     shared_ptr<DeepImage> CombineImages(vector<shared_ptr<DeepImage>> images);
+
+    /* Arnold has a bug: it premultiplies a lot of EXR channels by alpha that it shouldn't.
+     * Only color channels should be multiplied by alpha, but it premultiplies world space
+     * positions, simple float channels, etc.  Undo this. */
+    template<typename T>
+    void UnpremultiplyChannel(shared_ptr<const TypedDeepImageChannel<Imath::V4f>> rgba, shared_ptr<TypedDeepImageChannel<T>> channel);
+}
+
+template<typename T>
+void DeepImageUtil::UnpremultiplyChannel(shared_ptr<const TypedDeepImageChannel<Imath::V4f>> rgba, shared_ptr<TypedDeepImageChannel<T>> channel)
+{
+    for(int y = 0; y < channel->height; y++)
+    {
+	for(int x = 0; x < channel->width; x++)
+	{
+	    const V4f *rgbaSamples = rgba->GetSamples(x, y);
+	    T *channelSamples = channel->GetSamples(x, y);
+	    for(int s = 0; s < channel->sampleCount[y][x]; ++s)
+	    {
+		float a = rgbaSamples[s][3];
+		if(a > 0.00001f)
+		    channelSamples[s] /= a;
+	    }
+	}
+    }
 }
 
 #endif

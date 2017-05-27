@@ -10,7 +10,7 @@ using namespace Imath;
 
 
 // Flatten the color channels of a deep EXR to a simple flat layer.
-shared_ptr<SimpleImage> DeepImageUtil::CollapseEXR(shared_ptr<const DeepImage> image, set<int> objectIds)
+shared_ptr<SimpleImage> DeepImageUtil::CollapseEXR(shared_ptr<const DeepImage> image, shared_ptr<const TypedDeepImageChannel<float>> mask, set<int> objectIds)
 {
     shared_ptr<SimpleImage> result = make_shared<SimpleImage>(image->width, image->height);
 
@@ -31,6 +31,10 @@ shared_ptr<SimpleImage> DeepImageUtil::CollapseEXR(shared_ptr<const DeepImage> i
 		bool IncludeLayer = objectIds.empty() || objectIds.find(id->Get(x,y,s)) != objectIds.end();
 
 		V4f color = rgba->Get(x,y,s);
+
+		if(mask)
+		    color *= mask->Get(x,y,s);
+
 		float alpha = color[3];
 		for(int channel = 0; channel < 4; ++channel)
 		{

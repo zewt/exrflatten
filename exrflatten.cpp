@@ -146,16 +146,9 @@ void SeparateLayer(
 
 		color = color*(1-alpha);
 
+		// If we have a mask, multiply rgba by it to get a masked version.
 		if(mask != nullptr)
-		{
-		    // If we have a mask, we'll multiply rgba by it to get a masked version.  However,
-		    // the mask will be premultiplied by rgba[3] too.  To get the real mask value, we
-		    // need to un-premultiply it.
-		    float alpha = sampleColor[3];
-		    float maskValue = mask->Get(x, y, s);
-		    maskValue = alpha > 0.0001f? (maskValue / alpha):0;
-		    sampleColor *= maskValue;
-		}
+		    sampleColor *= mask->Get(x, y, s);
 
 		color += sampleColor;
 	    }
@@ -377,11 +370,31 @@ bool FlattenFiles::flatten(Config config)
 	    image->AddChannelToFramebuffer<V3f>("N", { "N.X", "N.Y", "N.Z" }, frameBuffer);
 
 	    // Also read channels used by masks.
+	    set<string> maskChannels;
 	    for(auto maskDesc: config.masks)
-		image->AddChannelToFramebuffer<float>(maskDesc.maskChannel, { maskDesc.maskChannel }, frameBuffer);
+		    maskChannels.insert(maskDesc.maskChannel);
+
+	    for(auto strokeDesc: config.strokes)
+	    {
+		if(!strokeDesc.strokeMaskChannel.empty())
+		    maskChannels.insert(strokeDesc.strokeMaskChannel);
+		if(!strokeDesc.intersectionMaskChannel.empty())
+		    maskChannels.insert(strokeDesc.intersectionMaskChannel);
+	    }
+
+	    for(string channel: maskChannels)
+		image->AddChannelToFramebuffer<float>(channel, { channel }, frameBuffer);
 
 	    reader.Read(frameBuffer);
 	    images.push_back(image);
+
+	    // Work around bad Arnold channels: non-color channels get multiplied by alpha.
+	    auto rgba = image->GetChannel<V4f>("rgba");
+	    DeepImageUtil::UnpremultiplyChannel(rgba, image->GetChannel<V3f>("P"));
+	    DeepImageUtil::UnpremultiplyChannel(rgba, image->GetChannel<V3f>("N"));
+
+	    for(string channel: maskChannels)
+		DeepImageUtil::UnpremultiplyChannel(rgba, image->GetChannel<float>(channel));
 	}
 	catch(const BaseExc &e)
 	{

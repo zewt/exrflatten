@@ -48,19 +48,20 @@ void DeepImageStroke::CalculateDistance(
     // phase 1: find the distance to the closest pixel vertically
     for(int x = 0; x < width; ++x)
     {
+#define SMALL 0.01f
 	{
 	    const int y = 0;
 	    const int idx = x+y*width;
 	    g[y][x] = GetMask(x, y);
-	    if(g[y][x] <= 0.0001f)       g[y][x] = 0;
-	    else if(g[y][x] >= 0.9999f)  g[y][x] = inf; // no pixel above
+	    if(g[y][x] <= SMALL)         g[y][x] = 0;
+	    else if(g[y][x] >= 1-SMALL)  g[y][x] = inf; // no pixel above
 	}
 	// scan 1
 	for(int y = 1; y < height; ++y)
 	{
 	    g[y][x] = GetMask(x, y);
-	    if(g[y][x] <= 0.0001f)       g[y][x] = 0;
-	    else if(g[y][x] >= 0.9999f)  g[y][x] = g[y-1][x] + 1; // 1 + g for the pixel above
+	    if(g[y][x] <= SMALL)         g[y][x] = 0;
+	    else if(g[y][x] >= 1-SMALL)  g[y][x] = g[y-1][x] + 1; // 1 + g for the pixel above
 	}
 
 	// scan 2
@@ -180,7 +181,6 @@ void DeepImageStroke::ApplyStrokeUsingMask(const DeepImageStroke::Config &config
 	}
     }
 
-
     // Calculate a stroke for the flattened image, and insert the stroke as deep samples, so
     // it'll get composited at the correct depth, allowing it to be obscured.
     CalculateDistance(mask->width, mask->height,
@@ -240,29 +240,6 @@ void DeepImageStroke::ApplyStrokeUsingMask(const DeepImageStroke::Config &config
 	 * However, we want to put the stroke over the shape, not underneath it, so it can go over
 	 * other stroked objects.  Deal with this by mixing the existing color over the stroke color.
 	 */
-	/*
-	const vector<float> &visibilities = SampleVisibilities[y][x];
-
-	if(x == 607 && y == 181)
-	{
-	    printf("x %ix%i -> %ix%i\n", x, y, sx, sy);
-	    for(int s = 0; s < image->NumSamples(x,y); ++s)
-	    {
-		if(id->Get(x,y,s) != config.objectId)
-		    continue;
-
-//		V3f world = P->Get(x, y, s);
-		V4f c = rgba->Get(x, y, s);
-//		world /= c[3];
-		float depth = Z->Get(x,y,s);
-
-		printf("-> %f (%f), %f %f %f %f (v %f)\n", depth, SourceSampleDistance,
-		    c[0], c[1], c[2], c[3], visibilities[s]);
-	    }
-	}
-	*/
-
-#if 1
 	V4f topColor(0,0,0,0);
 	for(int s = 0; s < image->NumSamples(x, y); ++s)
 	{
@@ -278,7 +255,6 @@ void DeepImageStroke::ApplyStrokeUsingMask(const DeepImageStroke::Config &config
 	}
 
 	V4f strokeColor = config.strokeColor * alpha;
-	//V4f topColor = mask->GetRGBA(x, y);
 	V4f mixedColor = topColor + strokeColor * (1-topColor[3]);
 
 	// Don't add an empty sample.
@@ -292,14 +268,6 @@ void DeepImageStroke::ApplyStrokeUsingMask(const DeepImageStroke::Config &config
 	Z->GetLast(x,y) = zDistance;
 	ZBack->GetLast(x,y) = zDistance;
 	id->GetLast(x,y) = config.outputObjectId != -1? config.outputObjectId:config.objectId;
-#else
-	V4f strokeColor = config.strokeColor * alpha;
-	image->AddSample(x, y);
-	rgba->GetLast(x,y) = strokeColor;
-	Z->GetLast(x,y) = zDistance;
-	ZBack->GetLast(x,y) = zDistance;
-	id->GetLast(x,y) = config.objectId;
-#endif
     });
 }
 
@@ -307,12 +275,14 @@ void DeepImageStroke::ApplyStrokeUsingMask(const DeepImageStroke::Config &config
 // which is set for pixels that neighbor pixels further away.  What we're really looking
 // for is mesh discontinuities: neighboring pixels which are from two different places
 // and not a continuous object.
-shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageStroke::Config &config, shared_ptr<const DeepImage> image)
+//
+// If imageMask is non-null, it's a mask to apply to the layer we're creating a mask for.
+shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageStroke::Config &config,
+    shared_ptr<const DeepImage> image, shared_ptr<const TypedDeepImageChannel<float>> imageMask)
 {
     shared_ptr<SimpleImage> mask = make_shared<SimpleImage>(image->width, image->height);
 
     // Create a mask using simple edge detection.
-    auto rgba = image->GetChannel<V4f>("rgba");
     auto id = image->GetChannel<uint32_t>("id");
     auto Z = image->GetChannel<float>("Z");
     auto P = image->GetChannel<V3f>("P");
@@ -372,11 +342,8 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 			continue;
 
 		    float depth1 = Z->Get(x, y, s1);
-		    float alpha1 = rgba->Get(x, y, s1)[3];
 
-		    // We're dividing the world space position by alpha to work around an Arnold
-		    // bug causing vector passes to be "premultiplied" as if they're colors.
-		    V3f world1 = P->Get(x, y, s1) / alpha1;
+		    V3f world1 = P->Get(x, y, s1);
 		    // V3f normal1 = N->Get(x, y, s1).normalized();
 
 		    for(int s2 = 0; s2 < image->NumSamples(x2,y2); ++s2)
@@ -395,8 +362,7 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 			if(depth2 < depth1) // XXX
 			    continue;
 
-			float alpha2 = rgba->Get(x2, y2, s2)[3];
-			V3f world2 = P->Get(x2, y2, s2) / alpha2;
+			V3f world2 = P->Get(x2, y2, s2);
 
 			// V3f normal2 = N->Get(x2, y2, s2).normalized();
 			// float angle = acosf(normal1.dot(normal2)) * 180 / M_PI;
@@ -445,6 +411,10 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 			// transparent in the mask.
 			result *= sampleVisibility1;
 
+			// If we have a mask, apply it now like visibility.
+			if(imageMask)
+			    result *= imageMask->Get(x,y,s1);
+
 			totalDifference += result;
 		    }
 		}
@@ -467,17 +437,25 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 
 void DeepImageStroke::AddStroke(const DeepImageStroke::Config &config, shared_ptr<DeepImage> image)
 {
+    shared_ptr<TypedDeepImageChannel<float>> strokeMask;
+    if(!config.strokeMaskChannel.empty())
+	strokeMask = image->GetChannel<float>(config.strokeMaskChannel);
+
+    shared_ptr<TypedDeepImageChannel<float>> intersectionMask;
+    if(!config.intersectionMaskChannel.empty())
+	intersectionMask = image->GetChannel<float>(config.intersectionMaskChannel);
+
     // Flatten the image.  We'll use this as the mask to create the stroke.  Don't
     // actually apply the stroke until we deal with contours, so we don't apply contours
     // to strokes.
-    shared_ptr<SimpleImage> outlineMask = DeepImageUtil::CollapseEXR(image, { config.objectId });
+    shared_ptr<SimpleImage> outlineMask = DeepImageUtil::CollapseEXR(image, strokeMask, { config.objectId });
+    //outlineMask->WriteEXR("test.exr");
 
     // Create the contour mask.  It's important that we do this before applying the stroke.
     shared_ptr<SimpleImage> contourMask;
     if(config.strokeIntersections)
-	contourMask = CreateIntersectionMask(config, image);
-
-    //mask->WriteEXR("test.exr");
+	contourMask = CreateIntersectionMask(config, image, intersectionMask);
+    //if(contourMask) contourMask->WriteEXR("test.exr");
 
     // Apply the regular stroke and the contour stroke.
     ApplyStrokeUsingMask(config, image, outlineMask);
@@ -485,7 +463,7 @@ void DeepImageStroke::AddStroke(const DeepImageStroke::Config &config, shared_pt
 	ApplyStrokeUsingMask(config, image, contourMask);
 }
 
-V4f ParseColor(const string &str)
+static V4f ParseColor(const string &str)
 {
     int ir=255, ib=255, ig=255, ia=255;
     int result = sscanf( str.c_str(), "#%2x%2x%2x%2x", &ir, &ig, &ib, &ia );
@@ -522,6 +500,10 @@ void DeepImageStroke::Config::ParseOptionsString(string optionsString)
 	    fade = (float) atof(args[1].c_str());
 	else if(args[0] == "color" && args.size() > 1)
 	    strokeColor = ParseColor(args[1]);
+	else if(args[0] == "stroke-mask" && args.size() > 1)
+	    strokeMaskChannel = args[1];
+	else if(args[0] == "intersection-mask" && args.size() > 1)
+	    intersectionMaskChannel = args[1];
 	else if(args[0] == "intersections")
 	    strokeIntersections = true;
 	else if(args[0] == "intersection-min-depth")
