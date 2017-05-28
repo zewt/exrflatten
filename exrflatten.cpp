@@ -50,6 +50,7 @@ using namespace Iex;
 
 struct Layer
 {
+    string filename;
     string layerName;
     string layerType;
     int order = 0;
@@ -357,7 +358,7 @@ bool FlattenFiles::flatten(Config config)
     // Separate the image into layers.
     vector<Layer> layers;
     int nextOrder = 1;
-    auto getLayer = [&layers, &nextOrder](string layerName, string layerType, int width, int height, bool ordered)
+    auto getLayer = [&image, &layers, &nextOrder, &config](string layerName, string layerType, int width, int height, bool ordered)
     {
 	layers.push_back(Layer(width, height));
 	Layer &layer = layers.back();
@@ -365,6 +366,12 @@ bool FlattenFiles::flatten(Config config)
 	layer.layerType = layerType;
 	if(ordered)
 	    layer.order = nextOrder++;
+
+	// Copy all image attributes, except for built-in EXR headers that we shouldn't set.
+	DeepImageUtil::CopyLayerAttributes(image->header, layer.image->header);
+
+	layer.filename = MakeOutputFilename(config, layer);
+
 	return layer.image;
     };
 
@@ -393,11 +400,8 @@ bool FlattenFiles::flatten(Config config)
     for(const auto &layer: layers)
 	printf("Layer: %s, %s\n", layer.layerName.c_str(), layer.layerType.c_str());
 
-    shared_ptr<SimpleImage> flat = DeepImageUtil::CollapseEXR(image);
-    layers.push_back(Layer(image->width, image->height));
-    layers.back().layerName = "main";
-    layers.back().layerType = "color";
-    layers.back().image = flat;
+    auto combinedOut = getLayer("main", "color", image->width, image->height, false);
+    layers.back().image = DeepImageUtil::CollapseEXR(image);
 
     // Write the layers.
     for(const auto &layer: layers)
@@ -406,14 +410,10 @@ bool FlattenFiles::flatten(Config config)
 	if(layer.image->IsEmpty())
 	    continue;
 	
-	// Copy all image attributes, except for built-in EXR headers that we shouldn't set.
-	DeepImageUtil::CopyLayerAttributes(image->header, layer.image->header);
-
-        string outputName = MakeOutputFilename(config, layer);
-	printf("Writing %s\n", outputName.c_str());
+	printf("Writing %s\n", layer.filename.c_str());
 
         try {
-            layer.image->WriteEXR(outputName);
+            layer.image->WriteEXR(layer.filename);
         }
         catch(const BaseExc &e)
         {
