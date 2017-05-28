@@ -27,6 +27,14 @@ namespace DeepImageUtil {
     // Sort samples based on the depth of each pixel, furthest from the camera first.
     void SortSamplesByDepth(shared_ptr<DeepImage> image);
 
+    /* Separate a simple composited layer from a DeepImage. */
+    void SeparateLayer(
+	shared_ptr<const DeepImage> image,
+	int objectId,
+	shared_ptr<SimpleImage> layer,
+	const map<int,int> &layerOrder,
+	shared_ptr<const TypedDeepImageChannel<float>> mask = nullptr);
+
     // Return the final visibility of each sample at the given pixel.
     //
     // If a sample has three pixels with alpha 1.0, 0.5 and 0.5, the first sample is covered by the

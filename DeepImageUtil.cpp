@@ -126,6 +126,104 @@ void DeepImageUtil::SortSamplesByDepth(shared_ptr<DeepImage> image)
     }
 }
 
+/*
+ * Each pixel in an OpenEXR image can have multiple samples, and each sample can be tagged
+ * with a different object ID.  Normally to composite a deep EXR image into a regular image
+ * software needs to understand deep samples, to composite each sample, which makes them hard
+ * to use in traditional tools like Photoshop.  When you import the image, you just get a flat
+ * image and can't manipulate individual objects because the importer has to discard the deep
+ * data.
+ *
+ * Transform samples to a set of regular flattened layers that can be composited with normal
+ * "over" compositing.  This still loses deep data (there are a lot of things deep data can do
+ * that you can't do with this scheme), but this allows many compositing operations in 2D
+ * packages like After Effects and Photoshop to work.
+ *
+ * The resulting layer order is significant: the layers must be composited in the order specified
+ * by layerOrder.  Layers can be hidden from the bottom-up only: if you have layers [1,2,3,4],
+ * you can hide 1 or 1 and 2 and get correct output, but you can't hide 3 by itself.
+ */
+void DeepImageUtil::SeparateLayer(
+    shared_ptr<const DeepImage> image,
+    int objectId,
+    shared_ptr<SimpleImage> layer,
+    const map<int,int> &layerOrder,
+    shared_ptr<const TypedDeepImageChannel<float>> mask)
+{
+    auto rgba = image->GetChannel<V4f>("rgba");
+    auto id = image->GetChannel<uint32_t>("id");
+
+    for(int y = 0; y < image->height; y++)
+    {
+	for(int x = 0; x < image->width; x++)
+	{
+	    auto rgba = image->GetChannel<V4f>("rgba");
+
+	    V4f color(0,0,0,0);
+	    for(int s = 0; s < image->NumSamples(x, y); ++s)
+	    {
+
+		// The layers we're creating are in a fixed order specified by the user, but
+		// the samples can be in any order.  We have samples that are supposed to be
+		// behind others, but which will actually be in the top layer.
+		//
+		// Figure out how much opacity is covering us in later layers that's actually
+		// supposed to be behind us.  If coveringAlpha is 0.25, we're being covered up
+		// by 25% in a later layer that's really behind us.
+		float coveringAlpha = 0;
+		for(int s2 = 0; s2 <= s; ++s2)
+		{
+		    float coveringAlphaSample = rgba->Get(x,y,s2)[3];
+		    int actualObjectId = id->Get(x, y, s2);
+
+		    // layerCmp < 0 if this sample is in an earlier layer than the one we're outputting,
+		    // layerCmp > 0 if this sample is in a later layer.
+		    // If this sample is in an earlier layer, ignore it.  If it's in a later layer,
+		    // apply it.  If it's in this layer, reduce alpha by 1-a, but don't add it.
+		    int layerCmp = layerOrder.at(actualObjectId) - layerOrder.at(objectId);
+		    if(layerCmp >= 0) // above or same
+			coveringAlpha *= 1-coveringAlphaSample;
+		    if(layerCmp > 0) // above
+			coveringAlpha += coveringAlphaSample;
+		}
+
+		V4f sampleColor = rgba->Get(x,y,s);
+		const float &alpha = sampleColor[3];
+
+		// If this sample is part of this layer, composite it in.  If it's not, it still causes this
+		// color to become less visible, so apply alpha, but don't add color.
+		int layerCmp = layerOrder.at(id->Get(x, y, s)) - layerOrder.at(objectId);
+		if(layerCmp > 0)
+		    continue;
+
+		if(layerCmp < 0)
+		{
+		    // This sample is in an earlier layer (comped before this one).
+		    color *= 1-alpha;
+		    continue;
+		}
+
+		// If coveringAlpha is .5, we're being covered 50% in a later layer by
+		// things that are supposed to be behind us, so make this pixel 2x more
+		// visible.
+		if(1-coveringAlpha > 0.00001f)
+		    sampleColor /= 1-coveringAlpha;
+
+		color = color*(1-alpha);
+
+		// If we have a mask, multiply rgba by it to get a masked version.
+		if(mask != nullptr)
+		    sampleColor *= mask->Get(x, y, s);
+
+		color += sampleColor;
+	    }
+
+	    // Save the result.
+	    layer->GetRGBA(x,y) = color;
+	}
+    }
+}
+
 vector<float> DeepImageUtil::GetSampleVisibility(shared_ptr<const DeepImage> image, int x, int y)
 {
     vector<float> result;
