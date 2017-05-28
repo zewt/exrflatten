@@ -255,23 +255,6 @@ bool ParseConfig(Config &config, string opt, string value)
     return false;
 }
 
-void ReadConfigFromHeader(const Header &header, Config &config)
-{
-    for(auto it = header.begin(); it != header.end(); ++it)
-    {
-	string name = it.name();
-	if(name.substr(0, 8) != "flatten/")
-	    continue;
-	string argName = name.substr(8);
-
-	auto attr = dynamic_cast<const StringAttribute *>(&it.attribute());
-	if(attr == nullptr)
-	    continue;
-
-	ParseConfig(config, argName, attr->value());
-    }
-}
-
 namespace FlattenFiles
 {
     bool flatten(Config config);
@@ -355,10 +338,6 @@ bool FlattenFiles::flatten(Config config)
 	    DeepImageReader reader;
 	    image = reader.Open(inputFilename);
 
-	    // Read any parts of the configuration that are stored in the header.
-	    if(images.empty())
-		ReadConfigFromHeader(image->header, config);
-
 	    // Set up the channels we're interested in.
 	    DeepFrameBuffer frameBuffer;
 	    image->AddSampleCountSliceToFramebuffer(frameBuffer);
@@ -429,14 +408,6 @@ bool FlattenFiles::flatten(Config config)
 	config.layers.insert(config.layers.begin(), layerDesc);
     }
     
-/*    if(!config.layers.empty())
-    {
-        printf("Object ID names:\n");
-        for(auto layer: config.layers)
-            printf("Id %i: %s\n", layer.objectId, layer.layerName.c_str());
-        printf("\n");
-    }
-*/
     // Apply strokes to layers.
     for(auto stroke: config.strokes)
 	DeepImageStroke::AddStroke(stroke, image);
