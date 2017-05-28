@@ -18,7 +18,7 @@ namespace DeepImageUtil {
     shared_ptr<SimpleImage> CollapseEXR(shared_ptr<const DeepImage> image, shared_ptr<const TypedDeepImageChannel<float>> mask = nullptr, set<int> objectIds = {});
 
     // Change all samples with an object ID of fromObjectId to intoObjectId.
-    void CombineObjectId(shared_ptr<DeepImage> image, int fromObjectId, int intoObjectId);
+    void CombineObjectId(shared_ptr<TypedDeepImageChannel<uint32_t>> id, int fromObjectId, int intoObjectId);
 
     // Copy all image attributes from one header to another, except for built-in EXR headers that
     // we shouldn't set.

@@ -48,20 +48,6 @@ using namespace Iex;
 // - (and lots of other stuff, EXR is "too general")
 
 
-struct Layer
-{
-    string filename;
-    string layerName;
-    string layerType;
-    int order = 0;
-    shared_ptr<SimpleImage> image;
-
-    Layer(int width, int height)
-    {
-        image = make_shared<SimpleImage>(width, height);
-    }
-};
-
 struct Config
 {
     bool ParseOption(string opt, string value);
@@ -162,6 +148,21 @@ bool Config::ParseOption(string opt, string value)
 
 namespace FlattenFiles
 {
+    struct Layer
+    {
+	string filename;
+	string layerName;
+	string layerType;
+	int order = 0;
+	shared_ptr<SimpleImage> image;
+
+	Layer(int width, int height)
+	{
+	    image = make_shared<SimpleImage>(width, height);
+	}
+    };
+
+    void SeparateLayers(Config config, shared_ptr<const DeepImage> image, vector<Layer> &layers);
     bool flatten(Config config);
     string GetFrameNumberFromFilename(string s);
     string MakeOutputFilename(const Config &config, const Layer &layer);
@@ -232,6 +233,98 @@ string FlattenFiles::MakeOutputFilename(const Config &config, const Layer &layer
     return outputName;
 }
 
+void FlattenFiles::SeparateLayers(Config config, shared_ptr<const DeepImage> image, vector<Layer> &layers)
+{
+    // If no layer was specified for the default object ID, add one at the beginning.
+    {
+	bool hasDefaultObjectId = false;
+	for(auto layer: config.layers)
+	    if(layer.objectId == DeepImageUtil::NO_OBJECT_ID)
+		hasDefaultObjectId = true;
+
+	if(!hasDefaultObjectId)
+	{
+	    Config::LayerDesc layerDesc;
+	    layerDesc.objectId = 0;
+	    layerDesc.layerName = "default";
+	    config.layers.insert(config.layers.begin(), layerDesc);
+	}
+    }
+
+    // Create the layer ordering.  This just maps each layer's object ID to its position in
+    // the layer list.
+    map<int,int> layerOrder;
+    {
+	int next = 0;
+	for(auto layer: config.layers)
+	    layerOrder[layer.objectId] = next++;
+    }
+
+    // Collapse any object IDs that aren't associated with layers into the default layer
+    // to use with layer separation.
+    shared_ptr<TypedDeepImageChannel<uint32_t>> collapsedId(image->GetChannel<uint32_t>("id")->Clone());
+    for(int y = 0; y < image->height; y++)
+    {
+	for(int x = 0; x < image->width; x++)
+	{
+	    for(int s = 0; s < image->NumSamples(x, y); ++s)
+	    {
+		uint32_t value = collapsedId->Get(x,y,s);
+		if(layerOrder.find(value) == layerOrder.end())
+		    collapsedId->Get(x,y,s) = DeepImageUtil::NO_OBJECT_ID;
+	    }
+	}
+    }
+
+    // Combine layers.  This just changes the object IDs of samples, so we don't need to re-sort.
+    for(auto combine: config.combines)
+	DeepImageUtil::CombineObjectId(collapsedId, combine.second, combine.first);
+
+    // Separate the image into layers.
+    int nextOrder = 1;
+    auto getLayer = [&image, &layers, &nextOrder, &config](string layerName, string layerType, int width, int height, bool ordered)
+    {
+	layers.push_back(Layer(width, height));
+	Layer &layer = layers.back();
+	layer.layerName = layerName;
+	layer.layerType = layerType;
+	if(ordered)
+	    layer.order = nextOrder++;
+
+	// Copy all image attributes, except for built-in EXR headers that we shouldn't set.
+	DeepImageUtil::CopyLayerAttributes(image->header, layer.image->header);
+
+	layer.filename = MakeOutputFilename(config, layer);
+
+	return layer.image;
+    };
+
+    for(auto layerDesc: config.layers)
+    {
+	// Skip this layer if we've removed it from layerOrder.
+	if(layerOrder.find(layerDesc.objectId) == layerOrder.end())
+	    continue;
+
+	string layerName = layerDesc.layerName;
+
+	auto colorOut = getLayer(layerName, "color", image->width, image->height, true);
+	DeepImageUtil::SeparateLayer(image, collapsedId, layerDesc.objectId, colorOut, layerOrder, nullptr);
+
+	for(auto maskDesc: config.masks)
+	{
+	    auto mask = image->GetChannel<float>(maskDesc.maskChannel);
+	    if(mask)
+	    {
+		auto maskOut = getLayer(layerName, maskDesc.maskName, image->width, image->height, false);
+		DeepImageUtil::SeparateLayer(image, collapsedId, layerDesc.objectId, maskOut, layerOrder, mask);
+	    }
+	}
+    }
+
+    auto combinedOut = getLayer("main", "color", image->width, image->height, false);
+    layers.back().image = DeepImageUtil::CollapseEXR(image);
+}
+
 bool FlattenFiles::flatten(Config config)
 {
     vector<shared_ptr<DeepImage>> images;
@@ -285,31 +378,6 @@ bool FlattenFiles::flatten(Config config)
     else
 	image = DeepImageUtil::CombineImages(images);
 
-    // If no layer was specified for the default object ID, add one at the beginning.
-    {
-	bool hasDefaultObjectId = false;
-	for(auto layer: config.layers)
-	    if(layer.objectId == DeepImageUtil::NO_OBJECT_ID)
-		hasDefaultObjectId = true;
-
-	if(!hasDefaultObjectId)
-	{
-	    Config::LayerDesc layerDesc;
-	    layerDesc.objectId = 0;
-	    layerDesc.layerName = "default";
-	    config.layers.insert(config.layers.begin(), layerDesc);
-	}
-    }
-
-    // Create the layer ordering.  This just maps each layer's object ID to its position in
-    // the layer list.
-    map<int,int> layerOrder;
-    {
-	int next = 0;
-	for(auto layer: config.layers)
-	    layerOrder[layer.objectId] = next++;
-    }
-
     // Sort all samples by depth.  If we want to support volumes, this is where we'd do the rest
     // of "tidying", splitting samples where they overlap using splitVolumeSample.
     DeepImageUtil::SortSamplesByDepth(image);
@@ -322,81 +390,11 @@ bool FlattenFiles::flatten(Config config)
     if(!config.strokes.empty())
 	DeepImageUtil::SortSamplesByDepth(image);
 
-    // Combine layers.  This just changes the object IDs of samples, so we don't need to re-sort.
-    for(auto combine: config.combines)
-    {
-	DeepImageUtil::CombineObjectId(image, combine.second, combine.first);
-
-	// Remove the layer we merged, so we don't waste time trying to create a layer for it.
-	// Note that we do this after creating layerOrder.  We want to avoid creating the layer,
-	// but leave the empty space in the layer ordering so filenames don't change if combining
-	// is changed.
-	layerOrder.erase(combine.second);
-    }
-
-    // Collapse any object IDs that aren't associated with layers into the default layer
-    // to use with layer separation.
-    shared_ptr<TypedDeepImageChannel<uint32_t>> collapsedId(image->GetChannel<uint32_t>("id")->Clone());
-    for(int y = 0; y < image->height; y++)
-    {
-	for(int x = 0; x < image->width; x++)
-	{
-	    for(int s = 0; s < image->NumSamples(x, y); ++s)
-	    {
-		uint32_t value = collapsedId->Get(x,y,s);
-		if(layerOrder.find(value) == layerOrder.end())
-		    collapsedId->Get(x,y,s) = DeepImageUtil::NO_OBJECT_ID;
-	    }
-	}
-    }
-
-    // Separate the image into layers.
     vector<Layer> layers;
-    int nextOrder = 1;
-    auto getLayer = [&image, &layers, &nextOrder, &config](string layerName, string layerType, int width, int height, bool ordered)
-    {
-	layers.push_back(Layer(width, height));
-	Layer &layer = layers.back();
-	layer.layerName = layerName;
-	layer.layerType = layerType;
-	if(ordered)
-	    layer.order = nextOrder++;
-
-	// Copy all image attributes, except for built-in EXR headers that we shouldn't set.
-	DeepImageUtil::CopyLayerAttributes(image->header, layer.image->header);
-
-	layer.filename = MakeOutputFilename(config, layer);
-
-	return layer.image;
-    };
-
-    for(auto layerDesc: config.layers)
-    {
-	// Skip this layer if we've removed it from layerOrder.
-	if(layerOrder.find(layerDesc.objectId) == layerOrder.end())
-	    continue;
-
-	string layerName = layerDesc.layerName;
-
-	auto colorOut = getLayer(layerName, "color", image->width, image->height, true);
-	DeepImageUtil::SeparateLayer(image, collapsedId, layerDesc.objectId, colorOut, layerOrder, nullptr);
-
-	for(auto maskDesc: config.masks)
-	{
-	    auto mask = image->GetChannel<float>(maskDesc.maskChannel);
-	    if(mask)
-	    {
-		auto maskOut = getLayer(layerName, maskDesc.maskName, image->width, image->height, false);
-		DeepImageUtil::SeparateLayer(image, collapsedId, layerDesc.objectId, maskOut, layerOrder, mask);
-    	    }
-	}
-    }
+    SeparateLayers(config, image, layers);
 
     for(const auto &layer: layers)
 	printf("Layer: %s, %s\n", layer.layerName.c_str(), layer.layerType.c_str());
-
-    auto combinedOut = getLayer("main", "color", image->width, image->height, false);
-    layers.back().image = DeepImageUtil::CollapseEXR(image);
 
     // Write the layers.
     for(const auto &layer: layers)

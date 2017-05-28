@@ -51,14 +51,13 @@ shared_ptr<SimpleImage> DeepImageUtil::CollapseEXR(shared_ptr<const DeepImage> i
 }
 
 // Change all samples with an object ID of fromObjectId to intoObjectId.
-void DeepImageUtil::CombineObjectId(shared_ptr<DeepImage> image, int fromObjectId, int intoObjectId)
+void DeepImageUtil::CombineObjectId(shared_ptr<TypedDeepImageChannel<uint32_t>> id, int fromObjectId, int intoObjectId)
 {
-    auto id = image->GetChannel<uint32_t>("id");
-    for(int y = 0; y < image->height; y++)
+    for(int y = 0; y < id->height; y++)
     {
-	for(int x = 0; x < image->width; x++)
+	for(int x = 0; x < id->width; x++)
 	{
-	    for(int s = 0; s < image->NumSamples(x, y); ++s)
+	    for(int s = 0; s < id->sampleCount[y][x]; ++s)
 	    {
 		uint32_t &thisId = id->Get(x,y,s);
 		if(thisId == fromObjectId)
