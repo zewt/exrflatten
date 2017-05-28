@@ -65,6 +65,21 @@ struct Config
 
     struct MaskDesc
     {
+	void ParseOptionsString(string optionsString);
+
+	enum MaskType
+	{
+	    // The mask value will be output on the RGB channels.
+	    MaskType_RGB,
+
+	    // The mask value will be output on the alpha channel.
+	    MaskType_Alpha,
+
+	    // The mask will be composited with the color channel and output as a pre-masked
+	    // RGBA image.
+	    MaskType_Composited,
+	};
+	MaskType maskType = MaskType_Composited;
 	string maskChannel;
 	string maskName;
     };
@@ -76,52 +91,54 @@ struct Config
     vector<pair<int,int>> combines;
 };
 
+void Config::MaskDesc::ParseOptionsString(string optionsString)
+{
+    vector<string> options;
+    split(optionsString, ";", options);
+    for(string option: options)
+    {
+	vector<string> args;
+	split(option, "=", args);
+	if(args.size() < 1)
+	    continue;
+
+	if(args[0] == "channel" && args.size() > 1)
+	    maskChannel = args[1].c_str();
+	else if(args[0] == "name" && args.size() > 1)
+	    maskName = args[1].c_str();
+	else if(args[0] == "rgb")
+	    maskType = MaskType_RGB;
+	else if(args[0] == "alpha")
+	    maskType = MaskType_Alpha;
+	else if(args[0] == "comp")
+	    maskType = MaskType_Composited;
+    }
+}
+
 bool Config::ParseOption(string opt, string value)
 {
-    if(opt == "layers")
+    if(opt == "layer")
     {
-	vector<string> layerParts;
-	split(value, ";", layerParts);
-
-	for(string layerDesc: layerParts)
+	// id=name
+	vector<string> descParts;
+	split(value, "=", descParts);
+	if(descParts.size() != 2)
 	{
-	    // id=name
-	    vector<string> descParts;
-	    split(layerDesc, "=", descParts);
-	    if(descParts.size() != 2)
-	    {
-		printf("Warning: ignored part of layer desc \"%s\"\n", layerDesc.c_str());
-		continue;
-	    }
-
-	    Config::LayerDesc layer;
-	    layer.objectId = atoi(descParts[0].c_str());
-	    layer.layerName = descParts[1];
-	    layers.push_back(layer);
+	    printf("Warning: ignored part of layer desc \"%s\"\n", value.c_str());
+	    return true;
 	}
+
+	Config::LayerDesc layer;
+	layer.objectId = atoi(descParts[0].c_str());
+	layer.layerName = descParts[1];
+	layers.push_back(layer);
 	return true;
     }
-    else if(opt == "masks")
+    else if(opt == "mask")
     {
-	vector<string> maskParts;
-	split(value, ";", maskParts);
-
-	for(string maskDesc: maskParts)
-	{
-	    // channel=mask name
-	    vector<string> descParts;
-	    split(maskDesc, "=", descParts);
-	    if(descParts.size() != 2)
-	    {
-		printf("Warning: ignored part of mask desc \"%s\"\n", maskDesc.c_str());
-		continue;
-	    }
-
-	    Config::MaskDesc mask;
-	    mask.maskName = descParts[1];
-	    mask.maskChannel = descParts[0];
-	    masks.push_back(mask);
-	}
+	Config::MaskDesc mask;
+	mask.ParseOptionsString(value);
+	masks.push_back(mask);
 	return true;
     }
     else if(opt == "combine")
@@ -233,6 +250,51 @@ string FlattenFiles::MakeOutputFilename(const Config &config, const Layer &layer
     return outputName;
 }
 
+// Create a layer from an object ID and a mask.
+//
+// If alphaMask is false, the mask will be on the color channels and alpha
+// will be 1.  This is the way most people are used to dealing with masks.
+//
+// If alphaMask is true, the mask will be black and on the alpha channel.  This
+// is awkward, but it's the only way to use masks with Photoshop clipping masks.
+void ExtractMask(
+    bool alphaMask,
+    shared_ptr<const DeepImage> image,
+    shared_ptr<TypedDeepImageChannel<uint32_t>> id,
+    int objectId,
+    shared_ptr<SimpleImage> layer,
+    shared_ptr<const TypedDeepImageChannel<float>> mask)
+{
+    auto rgba = image->GetChannel<V4f>("rgba");
+
+    for(int y = 0; y < image->height; y++)
+    {
+	for(int x = 0; x < image->width; x++)
+	{
+	    V4f color(0,0,0,0);
+	    for(int s = 0; s < image->NumSamples(x, y); ++s)
+	    {
+		if(id->Get(x, y, s) != objectId)
+		    continue;
+
+		float maskValue = mask->Get(x, y, s);
+		V4f sampleColor;
+		if(alphaMask)
+		    sampleColor = V4f(0,0,0,maskValue);
+		else
+		    sampleColor = V4f(maskValue,maskValue,maskValue,1);
+
+		float alpha = rgba->Get(x,y,s)[3];
+		color = color*(1-alpha);
+		color += sampleColor;
+	    }
+
+	    // Save the result.
+	    layer->GetRGBA(x,y) = color;
+	}
+    }
+}
+
 void FlattenFiles::SeparateLayers(Config config, shared_ptr<const DeepImage> image, vector<Layer> &layers)
 {
     // If no layer was specified for the default object ID, add one at the beginning.
@@ -313,10 +375,16 @@ void FlattenFiles::SeparateLayers(Config config, shared_ptr<const DeepImage> ima
 	for(auto maskDesc: config.masks)
 	{
 	    auto mask = image->GetChannel<float>(maskDesc.maskChannel);
-	    if(mask)
+	    if(mask == nullptr)
+		continue;
+
+	    auto maskOut = getLayer(layerName, maskDesc.maskName, image->width, image->height, false);
+	    if(maskDesc.maskType == Config::MaskDesc::MaskType_Composited)
+    		DeepImageUtil::SeparateLayer(image, collapsedId, layerDesc.objectId, maskOut, layerOrder, mask);
+	    else
 	    {
-		auto maskOut = getLayer(layerName, maskDesc.maskName, image->width, image->height, false);
-		DeepImageUtil::SeparateLayer(image, collapsedId, layerDesc.objectId, maskOut, layerOrder, mask);
+		bool useAlpha = maskDesc.maskType == Config::MaskDesc::MaskType_Alpha;
+		ExtractMask(useAlpha, image, collapsedId, layerDesc.objectId, maskOut, mask);
 	    }
 	}
     }
@@ -417,8 +485,8 @@ int main(int argc, char **argv)
 	{"input", required_argument, NULL, 'i'},
 	{"output", required_argument, NULL, 'o'},
 	{"filename", required_argument, NULL, 'f'},
-	{"layers", required_argument, NULL, 0},
-	{"masks", required_argument, NULL, 0},
+	{"layer", required_argument, NULL, 0},
+	{"mask", required_argument, NULL, 0},
 	{0},
     };
 
