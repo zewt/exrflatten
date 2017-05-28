@@ -25,6 +25,7 @@
 #include <OpenEXR/Iex.h>
 
 #include "DeepImage.h"
+#include "DeepImageMasks.h"
 #include "DeepImageStroke.h"
 #include "DeepImageUtil.h"
 #include "helpers.h"
@@ -62,6 +63,8 @@ struct Config
 	int objectId;
     };
     vector<LayerDesc> layers;
+
+    vector<CreateMask> createMasks;
 
     struct MaskDesc
     {
@@ -139,6 +142,13 @@ bool Config::ParseOption(string opt, string value)
 	Config::MaskDesc mask;
 	mask.ParseOptionsString(value);
 	masks.push_back(mask);
+	return true;
+    }
+    else if(opt == "create-mask")
+    {
+	CreateMask createMask;
+	createMask.ParseOptionsString(value);
+	createMasks.push_back(createMask);
 	return true;
     }
     else if(opt == "combine")
@@ -250,51 +260,6 @@ string FlattenFiles::MakeOutputFilename(const Config &config, const Layer &layer
     return outputName;
 }
 
-// Create a layer from an object ID and a mask.
-//
-// If alphaMask is false, the mask will be on the color channels and alpha
-// will be 1.  This is the way most people are used to dealing with masks.
-//
-// If alphaMask is true, the mask will be black and on the alpha channel.  This
-// is awkward, but it's the only way to use masks with Photoshop clipping masks.
-void ExtractMask(
-    bool alphaMask,
-    shared_ptr<const DeepImage> image,
-    shared_ptr<TypedDeepImageChannel<uint32_t>> id,
-    int objectId,
-    shared_ptr<SimpleImage> layer,
-    shared_ptr<const TypedDeepImageChannel<float>> mask)
-{
-    auto rgba = image->GetChannel<V4f>("rgba");
-
-    for(int y = 0; y < image->height; y++)
-    {
-	for(int x = 0; x < image->width; x++)
-	{
-	    V4f color(0,0,0,0);
-	    for(int s = 0; s < image->NumSamples(x, y); ++s)
-	    {
-		if(id->Get(x, y, s) != objectId)
-		    continue;
-
-		float maskValue = mask->Get(x, y, s);
-		V4f sampleColor;
-		if(alphaMask)
-		    sampleColor = V4f(0,0,0,maskValue);
-		else
-		    sampleColor = V4f(maskValue,maskValue,maskValue,1);
-
-		float alpha = rgba->Get(x,y,s)[3];
-		color = color*(1-alpha);
-		color += sampleColor;
-	    }
-
-	    // Save the result.
-	    layer->GetRGBA(x,y) = color;
-	}
-    }
-}
-
 void FlattenFiles::SeparateLayers(Config config, shared_ptr<const DeepImage> image, vector<Layer> &layers)
 {
     // If no layer was specified for the default object ID, add one at the beginning.
@@ -384,7 +349,8 @@ void FlattenFiles::SeparateLayers(Config config, shared_ptr<const DeepImage> ima
 	    else
 	    {
 		bool useAlpha = maskDesc.maskType == Config::MaskDesc::MaskType_Alpha;
-		ExtractMask(useAlpha, image, collapsedId, layerDesc.objectId, maskOut, mask);
+		auto rgba = image->GetChannel<V4f>("rgba");
+		DeepImageUtil::ExtractMask(useAlpha, mask, rgba, collapsedId, layerDesc.objectId, maskOut);
 	    }
 	}
     }
@@ -404,39 +370,40 @@ bool FlattenFiles::flatten(Config config)
 	// Set up the channels we're interested in.
 	DeepFrameBuffer frameBuffer;
 	image->AddSampleCountSliceToFramebuffer(frameBuffer);
-	image->AddChannelToFramebuffer<V4f>("rgba", {"R", "G", "B", "A"}, frameBuffer);
-	image->AddChannelToFramebuffer<uint32_t>("id", {"id"}, frameBuffer);
-	image->AddChannelToFramebuffer<float>("Z", { "Z" }, frameBuffer);
-	image->AddChannelToFramebuffer<float>("ZBack", {"ZBack"}, frameBuffer);
-	image->AddChannelToFramebuffer<V3f>("P", { "P.X", "P.Y", "P.Z" }, frameBuffer);
-	image->AddChannelToFramebuffer<V3f>("N", { "N.X", "N.Y", "N.Z" }, frameBuffer);
+	image->AddChannelToFramebuffer<V4f>("rgba", {"R", "G", "B", "A"}, frameBuffer, false);
+	image->AddChannelToFramebuffer<uint32_t>("id", {"id"}, frameBuffer, false);
+	image->AddChannelToFramebuffer<float>("Z", { "Z" }, frameBuffer, false);
+	image->AddChannelToFramebuffer<float>("ZBack", {"ZBack"}, frameBuffer, false);
+	image->AddChannelToFramebuffer<V3f>("P", { "P.X", "P.Y", "P.Z" }, frameBuffer, true);
+	image->AddChannelToFramebuffer<V3f>("N", { "N.X", "N.Y", "N.Z" }, frameBuffer, true);
 
 	// Also read channels used by masks.
 	set<string> maskChannels;
 	for(auto maskDesc: config.masks)
-		maskChannels.insert(maskDesc.maskChannel);
+	    maskChannels.insert(maskDesc.maskChannel);
+
+	for(auto createMaskDesc: config.createMasks)
+	    createMaskDesc.AddLayers(image, frameBuffer);
 
 	for(auto strokeDesc: config.strokes)
 	{
 	    if(!strokeDesc.strokeMaskChannel.empty())
-		maskChannels.insert(strokeDesc.strokeMaskChannel);
+		image->AddChannelToFramebuffer<float>(strokeDesc.strokeMaskChannel, { strokeDesc.strokeMaskChannel }, frameBuffer, true);
 	    if(!strokeDesc.intersectionMaskChannel.empty())
-		maskChannels.insert(strokeDesc.intersectionMaskChannel);
+		image->AddChannelToFramebuffer<float>(strokeDesc.intersectionMaskChannel, { strokeDesc.intersectionMaskChannel }, frameBuffer, true);
 	}
-
-	for(string channel: maskChannels)
-	    image->AddChannelToFramebuffer<float>(channel, { channel }, frameBuffer);
 
 	reader.Read(frameBuffer);
 	images.push_back(image);
 
 	// Work around bad Arnold channels: non-color channels get multiplied by alpha.
 	auto rgba = image->GetChannel<V4f>("rgba");
-	DeepImageUtil::UnpremultiplyChannel(rgba, image->GetChannel<V3f>("P"));
-	DeepImageUtil::UnpremultiplyChannel(rgba, image->GetChannel<V3f>("N"));
-
-	for(string channel: maskChannels)
-	    DeepImageUtil::UnpremultiplyChannel(rgba, image->GetChannel<float>(channel));
+	for(auto it: image->channels)
+	{
+	    shared_ptr<DeepImageChannel> channel = it.second;
+	    if(channel->needsAlphaDivide)
+		channel->UnpremultiplyChannel(rgba);
+	}
     }
 
     // Combine the images.
@@ -457,6 +424,9 @@ bool FlattenFiles::flatten(Config config)
     // If we stroked any objects, re-sort samples, since new samples may have been added.
     if(!config.strokes.empty())
 	DeepImageUtil::SortSamplesByDepth(image);
+
+    for(const auto &createMask: config.createMasks)
+	createMask.Create(image);
 
     vector<Layer> layers;
     SeparateLayers(config, image, layers);
@@ -487,6 +457,7 @@ int main(int argc, char **argv)
 	{"filename", required_argument, NULL, 'f'},
 	{"layer", required_argument, NULL, 0},
 	{"mask", required_argument, NULL, 0},
+	{"create-mask", required_argument, NULL, 0},
 	{0},
     };
 
@@ -523,11 +494,8 @@ int main(int argc, char **argv)
 	if(!FlattenFiles::flatten(config))
 	    return 1;
     }
-    catch(const BaseExc &e)
+    catch(const exception &e)
     {
-	// This is an exception from the OpenEXR library, usually during file read/write.
-	// We don't include the filename here because OpenEXR's exceptions include the filename.
-	// (Unfortunately, the errors are also formatted awkwardly...)
 	fprintf(stderr, "%s\n", e.what());
 	return 1;
     }

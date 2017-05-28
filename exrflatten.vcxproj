@@ -95,6 +95,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="DeepImage.cpp" />
+    <ClCompile Include="DeepImageMasks.cpp" />
     <ClCompile Include="DeepImageUtil.cpp" />
     <ClCompile Include="exrflatten.cpp" />
     <ClCompile Include="exrsamples.cpp" />
@@ -105,6 +106,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DeepImage.h" />
+    <ClInclude Include="DeepImageMasks.h" />
     <ClInclude Include="DeepImageUtil.h" />
     <ClInclude Include="exrsamples.h" />
     <ClInclude Include="getopt.h" />

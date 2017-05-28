@@ -115,6 +115,11 @@ void TypedDeepImageChannel<T>::AddSample(int x, int y, int count)
 template<typename T>
 void TypedDeepImageChannel<T>::AddToFramebuffer(string name, const Header &header, DeepFrameBuffer &frameBuffer, int channel)
 {
+    // Make sure we don't add the same channel multiple times, since the second one
+    // will silently replace the first.
+    if(frameBuffer.findSlice(name) != NULL)
+	throw exception("The same EXR channel was added more than once");
+
     // When reading deep files, OpenEXR expects a packed array of pointers for each pixel,
     // pointing to an array of sample values, and it takes a stride value from one sample
     // to the next.  However, there's no way to specify an offset from the start of the
@@ -158,6 +163,26 @@ void TypedDeepImageChannel<T>::AddToFramebuffer(string name, const Header &heade
     int sampleStride = sizeof(T);
     DeepSlice slice(pt, base, xStride, yStride, sampleStride);
     frameBuffer.insert(name, slice);
+}
+
+template<typename T>
+void TypedDeepImageChannel<T>::UnpremultiplyChannel(shared_ptr<const DeepImageChannel> rgba_)
+{
+    auto  rgba = dynamic_pointer_cast<const TypedDeepImageChannel<Imath::V4f>>(rgba_);
+    for(int y = 0; y < height; y++)
+    {
+	for(int x = 0; x < width; x++)
+	{
+	    const V4f *rgbaSamples = rgba->GetSamples(x, y);
+	    T *channelSamples = GetSamples(x, y);
+	    for(int s = 0; s < sampleCount[y][x]; ++s)
+	    {
+		float a = rgbaSamples[s][3];
+		if(a > 0.00001f)
+		    channelSamples[s] = T(channelSamples[s] / a);
+	    }
+	}
+    }
 }
 
 DeepImage::DeepImage(int width_, int height_)

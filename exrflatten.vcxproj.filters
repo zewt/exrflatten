@@ -9,6 +9,7 @@
     <ClCompile Include="DeepImageUtil.cpp" />
     <ClCompile Include="SimpleImage.cpp" />
     <ClCompile Include="DeepImageStroke.cpp" />
+    <ClCompile Include="DeepImageMasks.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="exrsamples.h" />
@@ -18,5 +19,6 @@
     <ClInclude Include="DeepImageUtil.h" />
     <ClInclude Include="SimpleImage.h" />
     <ClInclude Include="DeepImageStroke.h" />
+    <ClInclude Include="DeepImageMasks.h" />
   </ItemGroup>
 </Project>

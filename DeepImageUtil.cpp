@@ -4,10 +4,27 @@
 
 #include <algorithm>
 #include <OpenEXR/ImathVec.h>
+#include <OpenEXR/ImfChannelList.h>
 
 using namespace Imf;
 using namespace Imath;
 
+vector<string> DeepImageUtil::GetChannelsInLayer(const Header &header, string layerName)
+{
+    // If layerName is a channel name itself, just return it.
+    if(header.channels().findChannel(layerName) != NULL)
+	return { layerName };
+
+    vector<string> result;
+    ChannelList::ConstIterator start, end;
+    header.channels().channelsInLayer(layerName, start, end);
+    while(start != end)
+    {
+	result.push_back(start.name());
+	++start;
+    }
+    return result;
+}
 
 // Flatten the color channels of a deep EXR to a simple flat layer.
 shared_ptr<SimpleImage> DeepImageUtil::CollapseEXR(shared_ptr<const DeepImage> image, shared_ptr<const TypedDeepImageChannel<float>> mask, set<int> objectIds)
@@ -214,6 +231,42 @@ void DeepImageUtil::SeparateLayer(
 		if(mask != nullptr)
 		    sampleColor *= mask->Get(x, y, s);
 
+		color += sampleColor;
+	    }
+
+	    // Save the result.
+	    layer->GetRGBA(x,y) = color;
+	}
+    }
+}
+
+void DeepImageUtil::ExtractMask(
+    bool alphaMask,
+    shared_ptr<const TypedDeepImageChannel<float>> mask,
+    shared_ptr<const TypedDeepImageChannel<V4f>> rgba,
+    shared_ptr<const TypedDeepImageChannel<uint32_t>> id,
+    int objectId,
+    shared_ptr<SimpleImage> layer)
+{
+    for(int y = 0; y < rgba->height; y++)
+    {
+	for(int x = 0; x < rgba->width; x++)
+	{
+	    V4f color(0,0,0,0);
+	    for(int s = 0; s < rgba->sampleCount[y][x]; ++s)
+	    {
+		if(id->Get(x, y, s) != objectId)
+		    continue;
+
+		float maskValue = mask->Get(x, y, s);
+		V4f sampleColor;
+		if(alphaMask)
+		    sampleColor = V4f(0,0,0,maskValue);
+		else
+		    sampleColor = V4f(maskValue,maskValue,maskValue,1);
+
+		float alpha = rgba->Get(x,y,s)[3];
+		color = color*(1-alpha);
 		color += sampleColor;
 	    }
 

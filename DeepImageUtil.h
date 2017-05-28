@@ -14,6 +14,10 @@ class SimpleImage;
 namespace DeepImageUtil {
     const int NO_OBJECT_ID = 0;
 
+    // The layer API in OpenEXR is awkward.  This is a helper to simply get the
+    // names of channels in a layer.
+    vector<string> GetChannelsInLayer(const Imf::Header &header, string layerName);
+
     // Flatten the color channels of a deep EXR to a simple flat layer.
     shared_ptr<SimpleImage> CollapseEXR(shared_ptr<const DeepImage> image, shared_ptr<const TypedDeepImageChannel<float>> mask = nullptr, set<int> objectIds = {});
 
@@ -35,6 +39,21 @@ namespace DeepImageUtil {
 	shared_ptr<SimpleImage> layer,
 	const map<int,int> &layerOrder,
 	shared_ptr<const TypedDeepImageChannel<float>> mask = nullptr);
+
+    // Create a layer from an object ID and a mask.
+    //
+    // If alphaMask is false, the mask will be on the color channels and alpha
+    // will be 1.  This is the way most people are used to dealing with masks.
+    //
+    // If alphaMask is true, the mask will be black and on the alpha channel.  This
+    // is awkward, but it's the only way to use masks with Photoshop clipping masks.
+    void ExtractMask(
+	bool alphaMask,
+	shared_ptr<const TypedDeepImageChannel<float>> mask,
+	shared_ptr<const TypedDeepImageChannel<Imath::V4f>> rgba,
+	shared_ptr<const TypedDeepImageChannel<uint32_t>> id,
+	int objectId,
+	shared_ptr<SimpleImage> layer);
 
     // Return the final visibility of each sample at the given pixel.
     //

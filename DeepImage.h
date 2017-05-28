@@ -26,6 +26,12 @@ public:
     virtual DeepImageChannel *Clone() const = 0;
     virtual DeepImageChannel *CreateSameType(const Imf::Array2D<unsigned int> &sampleCount) const = 0;
     virtual void CopySamples(shared_ptr<const DeepImageChannel> OtherChannel, int x, int y, int firstIdx) = 0;
+
+    // Arnold multiplies channels by alpha that shouldn't be.  Premultiplying only makes sense for
+    // color channels, but Arnold does it with world space positions and other data.  If this is
+    // true, this is a channel that we need to divide by alpha to work around this problem.
+    bool needsAlphaDivide = false;
+    virtual void UnpremultiplyChannel(shared_ptr<const DeepImageChannel> rgba) = 0;
 };
 
 template<typename T>
@@ -96,6 +102,9 @@ public:
     // samples allocated to hold the copied samples.
     void CopySamples(shared_ptr<const DeepImageChannel> OtherChannel, int x, int y, int firstIdx);
 
+    // Unpremultiply this channel.
+    void UnpremultiplyChannel(shared_ptr<const DeepImageChannel> rgba);
+
     int width, height;
     Imf::Array2D<T *> data;
     vector<shared_ptr<Imf::Array2D<T *>>> readPointers;
@@ -125,7 +134,7 @@ public:
     //
     // For vector types, exrChannels is a list of the EXR channels for each component, eg. { "P.X", "P.Y", "P.Z" }.
     template<typename T>
-    shared_ptr<TypedDeepImageChannel<T>> AddChannelToFramebuffer(string channelName, vector<string> exrChannels, Imf::DeepFrameBuffer &frameBuffer);
+    shared_ptr<TypedDeepImageChannel<T>> AddChannelToFramebuffer(string channelName, vector<string> exrChannels, Imf::DeepFrameBuffer &frameBuffer, bool needsAlphaDivide);
 
     // Set sampleCount as the sample count slice in the given framebuffer.
     void AddSampleCountSliceToFramebuffer(Imf::DeepFrameBuffer &frameBuffer);
@@ -157,9 +166,20 @@ public:
 };
 
 template<typename T>
-shared_ptr<TypedDeepImageChannel<T>> DeepImage::AddChannelToFramebuffer(string channelName, vector<string> exrChannels, Imf::DeepFrameBuffer &frameBuffer)
+shared_ptr<TypedDeepImageChannel<T>> DeepImage::AddChannelToFramebuffer(string channelName, vector<string> exrChannels, Imf::DeepFrameBuffer &frameBuffer, bool needsAlphaDivide_)
 {
+    if(channels.find(channelName) != channels.end())
+    {
+	// Just return the channel we already created with this name.
+	auto result = dynamic_pointer_cast<TypedDeepImageChannel<T>>(channels.at(channelName));
+	if(result == nullptr)
+	    throw exception("A channel was added twice with different data types");
+	return result;
+    }
+
     shared_ptr<TypedDeepImageChannel<T>> channel = AddChannel<T>(channelName);
+    channel->needsAlphaDivide = needsAlphaDivide_;
+
     int idx = 0;
     for(string exrChannel: exrChannels)
 	channel->AddToFramebuffer(exrChannel, header, frameBuffer, idx++);
