@@ -391,8 +391,12 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 			// which are further away have fewer pixels on screen, so samples further apart
 			// are closer together.  If we don't do this, we'll be too aggressive in detecting
 			// contours for far away objects.
+			//
+			// Limit the amount we scale down for objects very close to the camera, so we don't end
+			// up with a very tiny threshold for objects very close to the camera.
 			float referenceDistance = 1000.0f;
 			float depthScale = scale(depth1, referenceDistance, referenceDistance*2, 1.0f, 2.0f);
+			depthScale = max(depthScale, 1/4.0f);
 
 			// Scale depth from the depth range to 0-1.
 			result = scale(result,
@@ -449,7 +453,6 @@ void DeepImageStroke::AddStroke(const DeepImageStroke::Config &config, shared_pt
     // actually apply the stroke until we deal with contours, so we don't apply contours
     // to strokes.
     shared_ptr<SimpleImage> outlineMask = DeepImageUtil::CollapseEXR(image, strokeMask, { config.objectId });
-    //outlineMask->WriteEXR("test.exr");
 
     // Create the contour mask.  It's important that we do this before applying the stroke.
     shared_ptr<SimpleImage> contourMask;
