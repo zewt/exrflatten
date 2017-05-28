@@ -101,7 +101,7 @@ public:
     vector<shared_ptr<Imf::Array2D<T *>>> readPointers;
 
     // The default value for this channel when adding new samples with AddSample.
-    T defaultValue;
+    T defaultValue = T();
 
     // This is a reference to DeepImage::sampleCount, which is shared by all channels.
     const Imf::Array2D<unsigned int> &sampleCount;
