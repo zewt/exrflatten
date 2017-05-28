@@ -494,6 +494,8 @@ void DeepImageStroke::Config::ParseOptionsString(string optionsString)
 
 	if(args[0] == "id" && args.size() > 1)
 	    objectId = atoi(args[1].c_str());
+	else if(args[0] == "output-id" && args.size() > 1)
+	    outputObjectId = atoi(args[1].c_str());
 	else if(args[0] == "radius" && args.size() > 1)
 	    radius = (float) atof(args[1].c_str());
 	else if(args[0] == "fade" && args.size() > 1)
