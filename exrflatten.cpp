@@ -237,56 +237,45 @@ bool FlattenFiles::flatten(Config config)
     vector<shared_ptr<DeepImage>> images;
     for(string inputFilename: config.inputFilenames)
     {
-	try {
-	    shared_ptr<DeepImage> image;
+	DeepImageReader reader;
+	shared_ptr<DeepImage> image = reader.Open(inputFilename);
 
-	    DeepImageReader reader;
-	    image = reader.Open(inputFilename);
+	// Set up the channels we're interested in.
+	DeepFrameBuffer frameBuffer;
+	image->AddSampleCountSliceToFramebuffer(frameBuffer);
+	image->AddChannelToFramebuffer<V4f>("rgba", {"R", "G", "B", "A"}, frameBuffer);
+	image->AddChannelToFramebuffer<uint32_t>("id", {"id"}, frameBuffer);
+	image->AddChannelToFramebuffer<float>("Z", { "Z" }, frameBuffer);
+	image->AddChannelToFramebuffer<float>("ZBack", {"ZBack"}, frameBuffer);
+	image->AddChannelToFramebuffer<V3f>("P", { "P.X", "P.Y", "P.Z" }, frameBuffer);
+	image->AddChannelToFramebuffer<V3f>("N", { "N.X", "N.Y", "N.Z" }, frameBuffer);
 
-	    // Set up the channels we're interested in.
-	    DeepFrameBuffer frameBuffer;
-	    image->AddSampleCountSliceToFramebuffer(frameBuffer);
-	    image->AddChannelToFramebuffer<V4f>("rgba", {"R", "G", "B", "A"}, frameBuffer);
-	    image->AddChannelToFramebuffer<uint32_t>("id", {"id"}, frameBuffer);
-	    image->AddChannelToFramebuffer<float>("Z", { "Z" }, frameBuffer);
-	    image->AddChannelToFramebuffer<float>("ZBack", {"ZBack"}, frameBuffer);
-	    image->AddChannelToFramebuffer<V3f>("P", { "P.X", "P.Y", "P.Z" }, frameBuffer);
-	    image->AddChannelToFramebuffer<V3f>("N", { "N.X", "N.Y", "N.Z" }, frameBuffer);
+	// Also read channels used by masks.
+	set<string> maskChannels;
+	for(auto maskDesc: config.masks)
+		maskChannels.insert(maskDesc.maskChannel);
 
-	    // Also read channels used by masks.
-	    set<string> maskChannels;
-	    for(auto maskDesc: config.masks)
-		    maskChannels.insert(maskDesc.maskChannel);
-
-	    for(auto strokeDesc: config.strokes)
-	    {
-		if(!strokeDesc.strokeMaskChannel.empty())
-		    maskChannels.insert(strokeDesc.strokeMaskChannel);
-		if(!strokeDesc.intersectionMaskChannel.empty())
-		    maskChannels.insert(strokeDesc.intersectionMaskChannel);
-	    }
-
-	    for(string channel: maskChannels)
-		image->AddChannelToFramebuffer<float>(channel, { channel }, frameBuffer);
-
-	    reader.Read(frameBuffer);
-	    images.push_back(image);
-
-	    // Work around bad Arnold channels: non-color channels get multiplied by alpha.
-	    auto rgba = image->GetChannel<V4f>("rgba");
-	    DeepImageUtil::UnpremultiplyChannel(rgba, image->GetChannel<V3f>("P"));
-	    DeepImageUtil::UnpremultiplyChannel(rgba, image->GetChannel<V3f>("N"));
-
-	    for(string channel: maskChannels)
-		DeepImageUtil::UnpremultiplyChannel(rgba, image->GetChannel<float>(channel));
-	}
-	catch(const BaseExc &e)
+	for(auto strokeDesc: config.strokes)
 	{
-	    // We don't include the filename here because OpenEXR's exceptions include the filename.
-	    // (Unfortunately, the errors are also formatted awkwardly...)
-	    fprintf(stderr, "%s\n", e.what());
-	    return false;
+	    if(!strokeDesc.strokeMaskChannel.empty())
+		maskChannels.insert(strokeDesc.strokeMaskChannel);
+	    if(!strokeDesc.intersectionMaskChannel.empty())
+		maskChannels.insert(strokeDesc.intersectionMaskChannel);
 	}
+
+	for(string channel: maskChannels)
+	    image->AddChannelToFramebuffer<float>(channel, { channel }, frameBuffer);
+
+	reader.Read(frameBuffer);
+	images.push_back(image);
+
+	// Work around bad Arnold channels: non-color channels get multiplied by alpha.
+	auto rgba = image->GetChannel<V4f>("rgba");
+	DeepImageUtil::UnpremultiplyChannel(rgba, image->GetChannel<V3f>("P"));
+	DeepImageUtil::UnpremultiplyChannel(rgba, image->GetChannel<V3f>("N"));
+
+	for(string channel: maskChannels)
+	    DeepImageUtil::UnpremultiplyChannel(rgba, image->GetChannel<float>(channel));
     }
 
     // Combine the images.
@@ -411,15 +400,7 @@ bool FlattenFiles::flatten(Config config)
 	    continue;
 	
 	printf("Writing %s\n", layer.filename.c_str());
-
-        try {
-            layer.image->WriteEXR(layer.filename);
-        }
-        catch(const BaseExc &e)
-        {
-            fprintf(stderr, "%s\n", e.what());
-            return false;
-        }
+        layer.image->WriteEXR(layer.filename);
     }
     return true;
 }
@@ -466,8 +447,19 @@ int main(int argc, char **argv)
 	return 1;
     }
 
-    if(!FlattenFiles::flatten(config))
-        return 1;
+    try {
+	if(!FlattenFiles::flatten(config))
+	    return 1;
+    }
+    catch(const BaseExc &e)
+    {
+	// This is an exception from the OpenEXR library, usually during file read/write.
+	// We don't include the filename here because OpenEXR's exceptions include the filename.
+	// (Unfortunately, the errors are also formatted awkwardly...)
+	fprintf(stderr, "%s\n", e.what());
+	return 1;
+    }
+
 
 //    char buf[1024];
 //    fgets(buf, 1000, stdin);
