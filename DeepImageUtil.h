@@ -30,6 +30,7 @@ namespace DeepImageUtil {
     /* Separate a simple composited layer from a DeepImage. */
     void SeparateLayer(
 	shared_ptr<const DeepImage> image,
+	shared_ptr<const TypedDeepImageChannel<uint32_t>> id,
 	int objectId,
 	shared_ptr<SimpleImage> layer,
 	const map<int,int> &layerOrder,

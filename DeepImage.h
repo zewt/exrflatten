@@ -23,6 +23,7 @@ public:
     virtual void AddToFramebuffer(string name, const Imf::Header &header, Imf::DeepFrameBuffer &frameBuffer, int channel = 0) = 0;
     virtual void Reorder(int x, int y, const vector<pair<int,int>> &order) = 0;
     virtual void AddSample(int x, int y, int count) = 0;
+    virtual DeepImageChannel *Clone() const = 0;
     virtual DeepImageChannel *CreateSameType(const Imf::Array2D<unsigned int> &sampleCount) const = 0;
     virtual void CopySamples(shared_ptr<const DeepImageChannel> OtherChannel, int x, int y, int firstIdx) = 0;
 };
@@ -83,6 +84,9 @@ public:
 	int last = sampleCount[y][x]-1;
 	return data[y][x][last];
     }
+
+    // Copy this layer and its data.
+    TypedDeepImageChannel<T> *Clone() const;
 
     // Return a new, empty TypedDeepImageChannel of this type, with a new sampleCount.
     TypedDeepImageChannel<T> *CreateSameType(const Imf::Array2D<unsigned int> &sampleCount) const;

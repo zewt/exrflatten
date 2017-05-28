@@ -145,13 +145,13 @@ void DeepImageUtil::SortSamplesByDepth(shared_ptr<DeepImage> image)
  */
 void DeepImageUtil::SeparateLayer(
     shared_ptr<const DeepImage> image,
+    shared_ptr<const TypedDeepImageChannel<uint32_t>> id,
     int objectId,
     shared_ptr<SimpleImage> layer,
     const map<int,int> &layerOrder,
     shared_ptr<const TypedDeepImageChannel<float>> mask)
 {
     auto rgba = image->GetChannel<V4f>("rgba");
-    auto id = image->GetChannel<uint32_t>("id");
 
     for(int y = 0; y < image->height; y++)
     {

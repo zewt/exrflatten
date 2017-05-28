@@ -50,6 +50,23 @@ TypedDeepImageChannel<T>::TypedDeepImageChannel(int width_, int height_, const A
 }
 
 template<typename T>
+TypedDeepImageChannel<T> *TypedDeepImageChannel<T>::Clone() const
+{
+    auto result = new TypedDeepImageChannel<T>(width, height, sampleCount);
+
+    for(int y = 0; y < data.height(); y++)
+    {
+	for(int x = 0; x < data.width(); x++)
+	{
+	    for(int s = 0; s < sampleCount[y][x]; ++s)
+		result->data[y][x][s] = data[y][x][s];
+	}
+    }
+
+    return result;
+}
+
+template<typename T>
 TypedDeepImageChannel<T> *TypedDeepImageChannel<T>::CreateSameType(const Array2D<unsigned int> &sampleCount) const
 {
     return new TypedDeepImageChannel<T>(width, height, sampleCount);

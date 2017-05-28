@@ -285,23 +285,35 @@ bool FlattenFiles::flatten(Config config)
     else
 	image = DeepImageUtil::CombineImages(images);
 
+    // If no layer was specified for the default object ID, add one at the beginning.
+    {
+	bool hasDefaultObjectId = false;
+	for(auto layer: config.layers)
+	    if(layer.objectId == DeepImageUtil::NO_OBJECT_ID)
+		hasDefaultObjectId = true;
+
+	if(!hasDefaultObjectId)
+	{
+	    Config::LayerDesc layerDesc;
+	    layerDesc.objectId = 0;
+	    layerDesc.layerName = "default";
+	    config.layers.insert(config.layers.begin(), layerDesc);
+	}
+    }
+
+    // Create the layer ordering.  This just maps each layer's object ID to its position in
+    // the layer list.
+    map<int,int> layerOrder;
+    {
+	int next = 0;
+	for(auto layer: config.layers)
+	    layerOrder[layer.objectId] = next++;
+    }
+
     // Sort all samples by depth.  If we want to support volumes, this is where we'd do the rest
     // of "tidying", splitting samples where they overlap using splitVolumeSample.
     DeepImageUtil::SortSamplesByDepth(image);
 
-    // If no layer was specified for the default object ID, add one at the beginning.
-    bool hasDefaultObjectId = false;
-    for(auto layer: config.layers)
-	if(layer.objectId == DeepImageUtil::NO_OBJECT_ID)
-	    hasDefaultObjectId = true;
-    if(!hasDefaultObjectId)
-    {
-	Config::LayerDesc layerDesc;
-	layerDesc.objectId = 0;
-	layerDesc.layerName = "default";
-	config.layers.insert(config.layers.begin(), layerDesc);
-    }
-    
     // Apply strokes to layers.
     for(auto stroke: config.strokes)
 	DeepImageStroke::AddStroke(stroke, image);
@@ -309,11 +321,6 @@ bool FlattenFiles::flatten(Config config)
     // If we stroked any objects, re-sort samples, since new samples may have been added.
     if(!config.strokes.empty())
 	DeepImageUtil::SortSamplesByDepth(image);
-
-    map<int,int> layerOrder;
-    int next = 0;
-    for(auto layer: config.layers)
-	layerOrder[layer.objectId] = next++;
 
     // Combine layers.  This just changes the object IDs of samples, so we don't need to re-sort.
     for(auto combine: config.combines)
@@ -327,19 +334,18 @@ bool FlattenFiles::flatten(Config config)
 	layerOrder.erase(combine.second);
     }
 
-    // Collapse any object IDs that aren't associated with layers into the default layer.
+    // Collapse any object IDs that aren't associated with layers into the default layer
+    // to use with layer separation.
+    shared_ptr<TypedDeepImageChannel<uint32_t>> collapsedId(image->GetChannel<uint32_t>("id")->Clone());
+    for(int y = 0; y < image->height; y++)
     {
-	auto id = image->GetChannel<uint32_t>("id");
-	for(int y = 0; y < image->height; y++)
+	for(int x = 0; x < image->width; x++)
 	{
-	    for(int x = 0; x < image->width; x++)
+	    for(int s = 0; s < image->NumSamples(x, y); ++s)
 	    {
-		for(int s = 0; s < image->NumSamples(x, y); ++s)
-		{
-		    uint32_t value = id->Get(x,y,s);
-		    if(layerOrder.find(value) == layerOrder.end())
-			id->Get(x,y,s) = DeepImageUtil::NO_OBJECT_ID;
-		}
+		uint32_t value = collapsedId->Get(x,y,s);
+		if(layerOrder.find(value) == layerOrder.end())
+		    collapsedId->Get(x,y,s) = DeepImageUtil::NO_OBJECT_ID;
 	    }
 	}
     }
@@ -373,7 +379,7 @@ bool FlattenFiles::flatten(Config config)
 	string layerName = layerDesc.layerName;
 
 	auto colorOut = getLayer(layerName, "color", image->width, image->height, true);
-	DeepImageUtil::SeparateLayer(image, layerDesc.objectId, colorOut, layerOrder, nullptr);
+	DeepImageUtil::SeparateLayer(image, collapsedId, layerDesc.objectId, colorOut, layerOrder, nullptr);
 
 	for(auto maskDesc: config.masks)
 	{
@@ -381,7 +387,7 @@ bool FlattenFiles::flatten(Config config)
 	    if(mask)
 	    {
 		auto maskOut = getLayer(layerName, maskDesc.maskName, image->width, image->height, false);
-		DeepImageUtil::SeparateLayer(image, layerDesc.objectId, maskOut, layerOrder, mask);
+		DeepImageUtil::SeparateLayer(image, collapsedId, layerDesc.objectId, maskOut, layerOrder, mask);
     	    }
 	}
     }
