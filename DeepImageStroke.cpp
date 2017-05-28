@@ -250,7 +250,7 @@ void DeepImageStroke::ApplyStrokeUsingMask(const DeepImageStroke::Config &config
 	    V4f c = rgba->Get(x,y,s);
 	    topColor = topColor*(1-c[3]);
 
-	    if(id->Get(x,y,s) == config.objectId)
+	    if(id->Get(x,y,s) == config.objectId || id->Get(x,y,s) == config.outputObjectId)
 		topColor += c;
 	}
 
