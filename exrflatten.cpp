@@ -57,6 +57,10 @@ struct Config
     string outputPath = "";
     string outputPattern = "<inputname> <ordername> <layer>.exr";
 
+    // If true, we'll save a flattened version of the image as a single layer,
+    // in addition to any separated layers we output.
+    bool saveFlattenedLayer = false;
+
     struct LayerDesc
     {
 	string layerName;
@@ -73,7 +77,7 @@ struct Config
 	enum MaskType
 	{
 	    // The mask value will be output on the RGB channels.
-	    MaskType_RGB,
+	    MaskType_Greyscale,
 
 	    // The mask value will be output on the alpha channel.
 	    MaskType_Alpha,
@@ -82,7 +86,7 @@ struct Config
 	    // RGBA image.
 	    MaskType_Composited,
 	};
-	MaskType maskType = MaskType_Composited;
+	MaskType maskType = MaskType_Greyscale;
 	string maskChannel;
 	string maskName;
     };
@@ -109,11 +113,11 @@ void Config::MaskDesc::ParseOptionsString(string optionsString)
 	    maskChannel = args[1].c_str();
 	else if(args[0] == "name" && args.size() > 1)
 	    maskName = args[1].c_str();
-	else if(args[0] == "rgb")
-	    maskType = MaskType_RGB;
+	else if(args[0] == "grey")
+	    maskType = MaskType_Greyscale;
 	else if(args[0] == "alpha")
 	    maskType = MaskType_Alpha;
-	else if(args[0] == "comp")
+	else if(args[0] == "rgb")
 	    maskType = MaskType_Composited;
     }
 }
@@ -168,6 +172,10 @@ bool Config::ParseOption(string opt, string value)
     {
 	strokes.emplace_back();
 	strokes.back().ParseOptionsString(optarg);
+    }
+    else if(opt == "flatten")
+    {
+	saveFlattenedLayer = true;
     }
 
     return false;
@@ -350,13 +358,16 @@ void FlattenFiles::SeparateLayers(Config config, shared_ptr<const DeepImage> ima
 	    {
 		bool useAlpha = maskDesc.maskType == Config::MaskDesc::MaskType_Alpha;
 		auto rgba = image->GetChannel<V4f>("rgba");
-		DeepImageUtil::ExtractMask(useAlpha, mask, rgba, collapsedId, layerDesc.objectId, maskOut);
+		DeepImageUtil::ExtractMask(useAlpha, false, mask, rgba, collapsedId, layerDesc.objectId, maskOut);
 	    }
 	}
     }
 
-    auto combinedOut = getLayer("main", "color", image->width, image->height, false);
-    layers.back().image = DeepImageUtil::CollapseEXR(image);
+    if(config.saveFlattenedLayer)
+    {
+	auto combinedOut = getLayer("main", "color", image->width, image->height, false);
+	layers.back().image = DeepImageUtil::CollapseEXR(image);
+    }
 }
 
 bool FlattenFiles::flatten(Config config)
@@ -378,9 +389,8 @@ bool FlattenFiles::flatten(Config config)
 	image->AddChannelToFramebuffer<V3f>("N", { "N.X", "N.Y", "N.Z" }, frameBuffer, true);
 
 	// Also read channels used by masks.
-	set<string> maskChannels;
 	for(auto maskDesc: config.masks)
-	    maskChannels.insert(maskDesc.maskChannel);
+    	    image->AddChannelToFramebuffer<float>(maskDesc.maskChannel, { maskDesc.maskChannel }, frameBuffer, true);
 
 	for(auto createMaskDesc: config.createMasks)
 	    createMaskDesc.AddLayers(image, frameBuffer);

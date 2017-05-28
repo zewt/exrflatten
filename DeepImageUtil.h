@@ -47,8 +47,13 @@ namespace DeepImageUtil {
     //
     // If alphaMask is true, the mask will be black and on the alpha channel.  This
     // is awkward, but it's the only way to use masks with Photoshop clipping masks.
+    //
+    // If compositeAlpha is true, the mask values will be composited with the alpha
+    // value of the sample.  If false, only the sample nearest to the camera will be
+    // used.
     void ExtractMask(
 	bool alphaMask,
+	bool compositeAlpha,
 	shared_ptr<const TypedDeepImageChannel<float>> mask,
 	shared_ptr<const TypedDeepImageChannel<Imath::V4f>> rgba,
 	shared_ptr<const TypedDeepImageChannel<uint32_t>> id,

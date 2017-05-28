@@ -242,6 +242,7 @@ void DeepImageUtil::SeparateLayer(
 
 void DeepImageUtil::ExtractMask(
     bool alphaMask,
+    bool compositeAlpha,
     shared_ptr<const TypedDeepImageChannel<float>> mask,
     shared_ptr<const TypedDeepImageChannel<V4f>> rgba,
     shared_ptr<const TypedDeepImageChannel<uint32_t>> id,
@@ -252,25 +253,33 @@ void DeepImageUtil::ExtractMask(
     {
 	for(int x = 0; x < rgba->width; x++)
 	{
-	    V4f color(0,0,0,0);
-	    for(int s = 0; s < rgba->sampleCount[y][x]; ++s)
+	    // Blend the mask like a color value, giving us a composited mask value
+	    // and its transparency: (mask, alpha)
+	    V2f result(0,0);
+	    for(int s = compositeAlpha? 0:rgba->sampleCount[y][x]-1; s < rgba->sampleCount[y][x]; ++s)
 	    {
 		if(id->Get(x, y, s) != objectId)
 		    continue;
 
 		float maskValue = mask->Get(x, y, s);
-		V4f sampleColor;
-		if(alphaMask)
-		    sampleColor = V4f(0,0,0,maskValue);
-		else
-		    sampleColor = V4f(maskValue,maskValue,maskValue,1);
-
 		float alpha = rgba->Get(x,y,s)[3];
-		color = color*(1-alpha);
-		color += sampleColor;
+		result *= 1-alpha;
+		result += V2f(maskValue*alpha, alpha);
 	    }
 
+	    // If the mask value for an object is 1, the mask output should be 1 even if the
+	    // object is transparent, or else transparency will cause the object to be masked.
+	    // If the object has alpha 0.5 and a mask of 1, we have (0.5, 0.5).  Divide out
+	    // alpha to get 1.
+	    if(result[1] > 0.0001f)
+		result /= result[1];
+
 	    // Save the result.
+	    V4f color(0,0,0,0);
+	    if(alphaMask)
+		color = V4f(result[0],result[0],result[0],result[0]);
+	    else
+		color = V4f(result[0],result[0],result[0],1);
 	    layer->GetRGBA(x,y) = color;
 	}
     }
