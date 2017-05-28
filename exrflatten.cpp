@@ -63,6 +63,8 @@ struct Layer
 
 struct Config
 {
+    bool ParseOption(string opt, string value);
+
     vector<string> inputFilenames;
     string outputPath = "";
     string outputPattern = "<inputname> <ordername> <layer>.exr";
@@ -87,7 +89,7 @@ struct Config
     vector<pair<int,int>> combines;
 };
 
-bool ParseConfig(Config &config, string opt, string value)
+bool Config::ParseOption(string opt, string value)
 {
     if(opt == "layers")
     {
@@ -108,7 +110,7 @@ bool ParseConfig(Config &config, string opt, string value)
 	    Config::LayerDesc layer;
 	    layer.objectId = atoi(descParts[0].c_str());
 	    layer.layerName = descParts[1];
-	    config.layers.push_back(layer);
+	    layers.push_back(layer);
 	}
 	return true;
     }
@@ -131,7 +133,7 @@ bool ParseConfig(Config &config, string opt, string value)
 	    Config::MaskDesc mask;
 	    mask.maskName = descParts[1];
 	    mask.maskChannel = descParts[0];
-	    config.masks.push_back(mask);
+	    masks.push_back(mask);
 	}
 	return true;
     }
@@ -146,12 +148,12 @@ bool ParseConfig(Config &config, string opt, string value)
 
 	int dst = atoi(optarg);
 	int src = atoi(split+1);
-	config.combines.push_back(make_pair(dst, src));
+	combines.push_back(make_pair(dst, src));
     }
     else if(opt == "stroke")
     {
-	config.strokes.emplace_back();
-	config.strokes.back().ParseOptionsString(optarg);
+	strokes.emplace_back();
+	strokes.back().ParseOptionsString(optarg);
     }
 
     return false;
@@ -445,7 +447,7 @@ int main(int argc, char **argv)
 	    switch( c )
 	    {
 	    case 0:
-		ParseConfig(config, opts[index].name, optarg? optarg:"");
+		config.ParseOption(opts[index].name, optarg? optarg:"");
 		break;
 	    case 'i':
 		config.inputFilenames.push_back(optarg);
