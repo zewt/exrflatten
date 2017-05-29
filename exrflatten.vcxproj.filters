@@ -10,6 +10,7 @@
     <ClCompile Include="SimpleImage.cpp" />
     <ClCompile Include="DeepImageStroke.cpp" />
     <ClCompile Include="DeepImageMasks.cpp" />
+    <ClCompile Include="EXROperation_WriteLayers.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="exrsamples.h" />
@@ -21,5 +22,6 @@
     <ClInclude Include="DeepImageStroke.h" />
     <ClInclude Include="DeepImageMasks.h" />
     <ClInclude Include="EXROperation.h" />
+    <ClInclude Include="EXROperation_WriteLayers.h" />
   </ItemGroup>
 </Project>
