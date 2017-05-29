@@ -181,7 +181,10 @@ vector<pair<string,string>> GetArgs(int argc, char **argv)
     {
 	string option = argv[i];
 	if(option.substr(0, 2) != "--")
+	{
+	    printf("Warning: unrecognized argument %s\n", option.c_str());
 	    continue;
+	}
 	option = option.substr(2);
 
 	string argument;
@@ -200,10 +203,8 @@ vector<pair<string,string>> GetArgs(int argc, char **argv)
 
 int main(int argc, char **argv)
 {
-    vector<pair<string,string>> args = GetArgs(argc, argv);
-
     Config config;
-    for(auto opt: args)
+    for(auto opt: GetArgs(argc, argv))
     {
 	if(!config.ParseOption(opt.first, opt.second))
 	    printf("Unrecognized argument: %s\n", opt.first.c_str());
