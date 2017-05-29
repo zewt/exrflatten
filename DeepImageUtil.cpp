@@ -253,33 +253,55 @@ void DeepImageUtil::ExtractMask(
     {
 	for(int x = 0; x < rgba->width; x++)
 	{
-	    // Blend the mask like a color value, giving us a composited mask value
-	    // and its transparency: (mask, alpha)
-	    V2f result(0,0);
-	    for(int s = compositeAlpha? 0:rgba->sampleCount[y][x]-1; s < rgba->sampleCount[y][x]; ++s)
+	    float resultValue = 0;
+	    if(compositeAlpha)
 	    {
-		if(id->Get(x, y, s) != objectId)
-		    continue;
+		// If compositeAlpha is true, blend the mask like a color value, giving us a
+		// composited mask value and its transparency: (mask, alpha).
+		V2f result(0,0);
+		for(int s = 0; s < rgba->sampleCount[y][x]; ++s)
+		{
+		    if(id->Get(x, y, s) != objectId)
+			continue;
 
-		float maskValue = mask->Get(x, y, s);
-		float alpha = rgba->Get(x,y,s)[3];
-		result *= 1-alpha;
-		result += V2f(maskValue*alpha, alpha);
+		    float maskValue = mask->Get(x, y, s);
+		    float alpha = rgba->Get(x,y,s)[3];
+		    result *= 1-alpha;
+		    result += V2f(maskValue*alpha, alpha);
+		}
+
+		// If the mask value for an object is 1, the mask output should be 1 even if the
+		// object is transparent, or else transparency will cause the object to be masked.
+		// If the object has alpha 0.5 and a mask of 1, we have (0.5, 0.5).  Divide out
+		// alpha to get 1.
+		if(result[1] > 0.0001f)
+		    result /= result[1];
+		resultValue = result[0];
 	    }
+	    else
+	    {
+		// If false, just find the nearest sample to the camera that isn't completely
+		// transparent.
+		for(int s = rgba->sampleCount[y][x]-1; s >= 0; --s)
+		{
+		    if(id->Get(x, y, s) != objectId)
+			continue;
 
-	    // If the mask value for an object is 1, the mask output should be 1 even if the
-	    // object is transparent, or else transparency will cause the object to be masked.
-	    // If the object has alpha 0.5 and a mask of 1, we have (0.5, 0.5).  Divide out
-	    // alpha to get 1.
-	    if(result[1] > 0.0001f)
-		result /= result[1];
+		    float alpha = rgba->Get(x,y,s)[3];
+		    if(alpha < 0.00001f)
+			continue;
+
+		    resultValue = mask->Get(x, y, s);
+		    break;
+		}
+	    }
 
 	    // Save the result.
 	    V4f color(0,0,0,0);
 	    if(alphaMask)
-		color = V4f(result[0],result[0],result[0],result[0]);
+		color = V4f(resultValue,resultValue,resultValue,resultValue);
 	    else
-		color = V4f(result[0],result[0],result[0],1);
+		color = V4f(resultValue,resultValue,resultValue,1);
 	    layer->GetRGBA(x,y) = color;
 	}
     }
