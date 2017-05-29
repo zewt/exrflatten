@@ -32,7 +32,7 @@ requiring deep compositing support.  This idea is based on
 
 # Download
 
-2016-08-22-1: [Windows](https://s3.amazonaws.com/exrflatten/exrflatten-2016-08-22-1.zip)
+2017-05-29-1: [Windows](https://s3.amazonaws.com/exrflatten/exrflatten-2017-05-29-1.zip)
 
 # Basic instructions
 
