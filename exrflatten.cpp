@@ -49,26 +49,99 @@ using namespace Iex;
 // - (and lots of other stuff, EXR is "too general")
 
 
-struct Config
-{
-    bool ParseOption(string opt, string value);
+#include "EXROperation.h"
 
+// Configuration settings shared by multiple EXROperations.  Note that this is
+// stored by value, so operations have a snapshot of the configuration at the time
+// they were created.
+struct SharedConfig
+{
+    string outputPath;
     vector<string> inputFilenames;
-    string outputPath = "";
+};
+
+class Operation_SaveFlattenedImage: public EXROperation
+{
+public:
+    Operation_SaveFlattenedImage(SharedConfig sharedConfig, string args)
+    {
+	filename = sharedConfig.outputPath;
+	if(!filename.empty())
+	    filename += "/";
+	filename += args;
+    }
+
+    void Run(shared_ptr<DeepImage> image)
+    {
+	auto flat = DeepImageUtil::CollapseEXR(image);
+
+	printf("Writing %s\n", filename.c_str());
+	flat->WriteEXR(filename);
+    }
+
+private:
+    string filename;
+};
+
+class Operation_Stroke: public EXROperation
+{
+public:
+    Operation_Stroke(string args)
+    {
+	strokeDesc.ParseOptionsString(args);
+    }
+
+    void Run(shared_ptr<DeepImage> image)
+    {
+	DeepImageStroke::AddStroke(strokeDesc, image);
+
+	// Re-sort samples, since new samples may have been added.
+	DeepImageUtil::SortSamplesByDepth(image);
+    }
+
+    void AddChannels(shared_ptr<DeepImage> image, DeepFrameBuffer &frameBuffer) const
+    {
+	if(!strokeDesc.strokeMaskChannel.empty())
+	    image->AddChannelToFramebuffer<float>(strokeDesc.strokeMaskChannel, { strokeDesc.strokeMaskChannel }, frameBuffer, true);
+	if(!strokeDesc.intersectionMaskChannel.empty())
+	    image->AddChannelToFramebuffer<float>(strokeDesc.intersectionMaskChannel, { strokeDesc.intersectionMaskChannel }, frameBuffer, true);
+    }
+
+private:
+    DeepImageStroke::Config strokeDesc;
+};
+
+class Operation_WriteLayers: public EXROperation
+{
+public:
+    SharedConfig sharedConfig;
     string outputPattern = "<inputname> <ordername> <layer>.exr";
 
-    // If true, we'll save a flattened version of the image as a single layer,
-    // in addition to any separated layers we output.
-    bool saveFlattenedLayer = false;
+    Operation_WriteLayers(SharedConfig sharedConfig_)
+    {
+	sharedConfig = sharedConfig_;
+    }
+
+    struct Layer
+    {
+	string filename;
+	string layerName;
+	string layerType;
+	int order = 0;
+	shared_ptr<SimpleImage> image;
+
+	Layer(int width, int height)
+	{
+	    image = make_shared<SimpleImage>(width, height);
+	}
+    };
 
     struct LayerDesc
     {
 	string layerName;
 	int objectId;
     };
-    vector<LayerDesc> layers;
-
-    vector<CreateMask> createMasks;
+    vector<LayerDesc> layerDescs;
 
     struct MaskDesc
     {
@@ -92,13 +165,248 @@ struct Config
     };
     vector<MaskDesc> masks;
 
-    vector<DeepImageStroke::Config> strokes;
-
     // A list of (dst, src) pairs to combine layers before writing them.
     vector<pair<int,int>> combines;
+
+    void Run(shared_ptr<DeepImage> image);
+
+    string MakeOutputFilename(const Layer &layer);
+    string GetFrameNumberFromFilename(string s);
+
+    void AddChannels(shared_ptr<DeepImage> image, DeepFrameBuffer &frameBuffer) const
+    {
+	// Add channels used by masks.
+	for(auto maskDesc: masks)
+	    image->AddChannelToFramebuffer<float>(maskDesc.maskChannel, { maskDesc.maskChannel }, frameBuffer, true);
+    }
+
+    bool AddArgument(string opt, string value)
+    {
+	if(opt == "filename")
+	{
+	    outputPattern = value;
+	    return true;
+	}
+	else if(opt == "layer")
+	{
+	    // id=name
+	    vector<string> descParts;
+	    split(value, "=", descParts);
+	    if(descParts.size() != 2)
+	    {
+		printf("Warning: ignored part of layer desc \"%s\"\n", value.c_str());
+		return true;
+	    }
+
+	    LayerDesc layer;
+	    layer.objectId = atoi(descParts[0].c_str());
+	    layer.layerName = descParts[1];
+	    layerDescs.push_back(layer);
+	    return true;
+	}
+	else if(opt == "save-mask")
+	{
+	    MaskDesc mask;
+	    mask.ParseOptionsString(value);
+	    masks.push_back(mask);
+	    return true;
+	}
+	else if(opt == "combine")
+	{
+	    const char *split = strchr(optarg, ',');
+	    if(split == NULL)
+	    {
+		printf("Invalid --combine (ignored)\n");
+		return true;
+	    }
+
+	    int dst = atoi(optarg);
+	    int src = atoi(split+1);
+	    combines.push_back(make_pair(dst, src));
+	    return true;
+	}
+
+	return false;
+    }
+
 };
 
-void Config::MaskDesc::ParseOptionsString(string optionsString)
+
+void Operation_WriteLayers::Run(shared_ptr<DeepImage> image)
+{
+    vector<Layer> layers;
+
+    // If no layer was specified for the default object ID, add one at the beginning.
+    {
+	bool hasDefaultObjectId = false;
+	for(auto layer: layerDescs)
+	    if(layer.objectId == DeepImageUtil::NO_OBJECT_ID)
+		hasDefaultObjectId = true;
+
+	if(!hasDefaultObjectId)
+	{
+	    LayerDesc layerDesc;
+	    layerDesc.objectId = 0;
+	    layerDesc.layerName = "default";
+	    // XXX: do locally, make this const
+	    layerDescs.insert(layerDescs.begin(), layerDesc);
+	}
+    }
+
+    // Create the layer ordering.  This just maps each layer's object ID to its position in
+    // the layer list.
+    map<int,int> layerOrder;
+    {
+	int next = 0;
+	for(auto layerDesc: layerDescs)
+	    layerOrder[layerDesc.objectId] = next++;
+    }
+
+    // Collapse any object IDs that aren't associated with layers into the default layer
+    // to use with layer separation.
+    shared_ptr<TypedDeepImageChannel<uint32_t>> collapsedId(image->GetChannel<uint32_t>("id")->Clone());
+    for(int y = 0; y < image->height; y++)
+    {
+	for(int x = 0; x < image->width; x++)
+	{
+	    for(int s = 0; s < image->NumSamples(x, y); ++s)
+	    {
+		uint32_t value = collapsedId->Get(x,y,s);
+		if(layerOrder.find(value) == layerOrder.end())
+		    collapsedId->Get(x,y,s) = DeepImageUtil::NO_OBJECT_ID;
+	    }
+	}
+    }
+
+    // Combine layers.  This just changes the object IDs of samples, so we don't need to re-sort.
+    for(auto combine: combines)
+	DeepImageUtil::CombineObjectId(collapsedId, combine.second, combine.first);
+
+    // Separate the image into layers.
+    int nextOrder = 1;
+    auto getLayer = [&](string layerName, string layerType, int width, int height, bool ordered)
+    {
+	layers.push_back(Layer(width, height));
+	Layer &layer = layers.back();
+	layer.layerName = layerName;
+	layer.layerType = layerType;
+	if(ordered)
+	    layer.order = nextOrder++;
+
+	// Copy all image attributes, except for built-in EXR headers that we shouldn't set.
+	DeepImageUtil::CopyLayerAttributes(image->header, layer.image->header);
+
+	layer.filename = MakeOutputFilename(layer);
+
+	return layer.image;
+    };
+
+    for(auto layerDesc: layerDescs)
+    {
+	// Skip this layer if we've removed it from layerOrder.
+	if(layerOrder.find(layerDesc.objectId) == layerOrder.end())
+	    continue;
+
+	string layerName = layerDesc.layerName;
+
+	auto colorOut = getLayer(layerName, "color", image->width, image->height, true);
+	DeepImageUtil::SeparateLayer(image, collapsedId, layerDesc.objectId, colorOut, layerOrder, nullptr);
+
+	for(auto maskDesc: masks)
+	{
+	    auto mask = image->GetChannel<float>(maskDesc.maskChannel);
+	    if(mask == nullptr)
+		continue;
+
+	    auto maskOut = getLayer(layerName, maskDesc.maskName, image->width, image->height, false);
+	    if(maskDesc.maskType == MaskDesc::MaskType_Composited)
+    		DeepImageUtil::SeparateLayer(image, collapsedId, layerDesc.objectId, maskOut, layerOrder, mask);
+	    else
+	    {
+		bool useAlpha = maskDesc.maskType == MaskDesc::MaskType_Alpha;
+		auto rgba = image->GetChannel<V4f>("rgba");
+		DeepImageUtil::ExtractMask(useAlpha, false, mask, rgba, collapsedId, layerDesc.objectId, maskOut);
+	    }
+	}
+    }
+
+    // Write the layers.
+    for(const auto &layer: layers)
+    {
+	// Don't write this layer if it's completely empty.
+	if(layer.image->IsEmpty())
+	    continue;
+
+	printf("Writing %s\n", layer.filename.c_str());
+	layer.image->WriteEXR(layer.filename);
+    }
+}
+
+// Do simple substitutions on the output filename.
+string Operation_WriteLayers::MakeOutputFilename(const Layer &layer)
+{
+    string outputName = outputPattern;
+    if(!sharedConfig.outputPath.empty())
+	outputName = sharedConfig.outputPath + "/" + outputName;
+
+    const string originalOutputName = outputName;
+
+    // <name>: the name of the object ID that we got from the EXR file, or "#100" if we
+    // only have a number.
+    outputName = subst(outputName, "<name>", layer.layerName);
+
+    string orderName = "";
+    if(layer.order > 0)
+	orderName += ssprintf("#%i ", layer.order);
+    orderName += layer.layerName;
+    outputName = subst(outputName, "<ordername>", orderName);
+
+    // <layer>: the output layer that we generated.  This is currently always "color".
+    outputName = subst(outputName, "<layer>", layer.layerType);
+
+    // <order>: the order this layer should be composited.  Putting this early in the
+    // filename makes filenames sort in comp order, which can be convenient.
+    outputName = subst(outputName, "<order>", ssprintf("%i", layer.order));
+
+    // <inputname>: the input filename, with the directory and ".exr" removed.
+    string inputName = sharedConfig.inputFilenames[0];
+    inputName = basename(inputName);
+    inputName = setExtension(inputName, "");
+    outputName = subst(outputName, "<inputname>", inputName);
+
+    // <frame>: the input filename's frame number, given a "abcdef.1234.exr" filename.
+    // It would be nice if there was an EXR attribute contained the frame number.
+    outputName = subst(outputName, "<frame>", GetFrameNumberFromFilename(sharedConfig.inputFilenames[0]));
+
+    static bool warned = false;
+    if(!warned && outputName == originalOutputName)
+    {
+        // If the output filename hasn't changed, there are no substitutions in it, which
+        // means we'll write a single file over and over.  That's probably not what was
+        // wanted.
+        fprintf(stderr, "Warning: output path \"%s\" doesn't contain any substitutions, so only one file will be written.\n", outputName.c_str());
+        fprintf(stderr, "Try \"%s\" instead.\n", (outputName + "_<name>.exr").c_str());
+        warned = true;
+    }
+
+    return outputName;
+}
+
+// Given a filename like "abcdef.1234.exr", return "1234".
+string Operation_WriteLayers::GetFrameNumberFromFilename(string s)
+{
+    // abcdef.1234.exr -> abcdef.1234
+    s = setExtension(s, "");
+
+    auto pos = s.rfind(".");
+    if(pos == string::npos)
+	return "";
+
+    string frameString = s.substr(pos+1);
+    return frameString;
+}
+
+void Operation_WriteLayers::MaskDesc::ParseOptionsString(string optionsString)
 {
     vector<string> options;
     split(optionsString, ";", options);
@@ -122,258 +430,89 @@ void Config::MaskDesc::ParseOptionsString(string optionsString)
     }
 }
 
-bool Config::ParseOption(string opt, string value)
+class Operation_CreateMask: public EXROperation
 {
-    if(opt == "layer")
+public:
+    Operation_CreateMask(string args)
     {
-	// id=name
-	vector<string> descParts;
-	split(value, "=", descParts);
-	if(descParts.size() != 2)
-	{
-	    printf("Warning: ignored part of layer desc \"%s\"\n", value.c_str());
-	    return true;
-	}
-
-	Config::LayerDesc layer;
-	layer.objectId = atoi(descParts[0].c_str());
-	layer.layerName = descParts[1];
-	layers.push_back(layer);
-	return true;
+	createMask.ParseOptionsString(args);
     }
-    else if(opt == "mask")
+
+    void Run(shared_ptr<DeepImage> image)
     {
-	Config::MaskDesc mask;
-	mask.ParseOptionsString(value);
-	masks.push_back(mask);
-	return true;
+	createMask.Create(image);
+    }
+
+    void AddChannels(shared_ptr<DeepImage> image, DeepFrameBuffer &frameBuffer) const
+    {
+	createMask.AddLayers(image, frameBuffer);
+    }
+
+private:
+    CreateMask createMask;
+};
+
+struct Config
+{
+    bool ParseOption(string opt, string value, vector<pair<string,string>> &accumulatedOptions);
+
+    SharedConfig sharedConfig;
+
+    vector<shared_ptr<EXROperation>> operations;
+};
+
+bool Config::ParseOption(string opt, string value, vector<pair<string,string>> &accumulatedOptions)
+{
+    shared_ptr<EXROperation> newOperation;
+    if(opt == "save-layers")
+    {
+	newOperation = make_shared<Operation_WriteLayers>(sharedConfig);
     }
     else if(opt == "create-mask")
     {
-	CreateMask createMask;
-	createMask.ParseOptionsString(value);
-	createMasks.push_back(createMask);
-	return true;
-    }
-    else if(opt == "combine")
-    {
-	const char *split = strchr(optarg, ',');
-	if(split == NULL)
-	{
-	    printf("Invalid --combine (ignored)\n");
-	    return true;
-	}
-
-	int dst = atoi(optarg);
-	int src = atoi(split+1);
-	combines.push_back(make_pair(dst, src));
+	newOperation = make_shared<Operation_CreateMask>(value);
     }
     else if(opt == "stroke")
     {
-	strokes.emplace_back();
-	strokes.back().ParseOptionsString(optarg);
+	newOperation = make_shared<Operation_Stroke>(value);
     }
-    else if(opt == "flatten")
+    else if(opt == "save-flattened")
     {
-	saveFlattenedLayer = true;
+	newOperation = make_shared<Operation_SaveFlattenedImage>(sharedConfig, value);
+    }
+    else
+    {
+	// We don't know what this option is, so it's probably an option for an upcoming
+	// operation.  Save it, and we'll hand it to the op once it's created.
+	accumulatedOptions.emplace_back(opt, value);
     }
 
-    return false;
+    if(newOperation == nullptr)
+	return false;
+
+    // Store the new operation.
+    operations.push_back(newOperation);
+
+    // Send any arguments that we didn't recognize to the new operation.
+    for(auto it: accumulatedOptions)
+    {
+	if(!newOperation->AddArgument(it.first, it.second))
+	    printf("Unrecognized argument: %s\n", it.first.c_str());
+    }
+    accumulatedOptions.clear();
+
+    return true;
 }
 
 namespace FlattenFiles
 {
-    struct Layer
-    {
-	string filename;
-	string layerName;
-	string layerType;
-	int order = 0;
-	shared_ptr<SimpleImage> image;
-
-	Layer(int width, int height)
-	{
-	    image = make_shared<SimpleImage>(width, height);
-	}
-    };
-
-    void SeparateLayers(Config config, shared_ptr<const DeepImage> image, vector<Layer> &layers);
     bool flatten(Config config);
-    string GetFrameNumberFromFilename(string s);
-    string MakeOutputFilename(const Config &config, const Layer &layer);
 };
-
-
-// Given a filename like "abcdef.1234.exr", return "1234".
-string FlattenFiles::GetFrameNumberFromFilename(string s)
-{
-    // abcdef.1234.exr -> abcdef.1234
-    s = setExtension(s, "");
-
-    auto pos = s.rfind(".");
-    if(pos == string::npos)
-	return "";
-
-    string frameString = s.substr(pos+1);
-    return frameString;
-}
-
-// Do simple substitutions on the output filename.
-string FlattenFiles::MakeOutputFilename(const Config &config, const Layer &layer)
-{
-    string outputName = config.outputPattern;
-    if(!config.outputPath.empty())
-	outputName = config.outputPath + "/" + outputName;
-
-    const string originalOutputName = outputName;
-
-    // <name>: the name of the object ID that we got from the EXR file, or "#100" if we
-    // only have a number.
-    outputName = subst(outputName, "<name>", layer.layerName);
-
-    string orderName = "";
-    if(layer.order > 0)
-	orderName += ssprintf("#%i ", layer.order);
-    orderName += layer.layerName;
-    outputName = subst(outputName, "<ordername>", orderName);
-
-    // <layer>: the output layer that we generated.  This is currently always "color".
-    outputName = subst(outputName, "<layer>", layer.layerType);
-
-    // <order>: the order this layer should be composited.  Putting this early in the
-    // filename makes filenames sort in comp order, which can be convenient.
-    outputName = subst(outputName, "<order>", ssprintf("%i", layer.order));
-
-    // <inputname>: the input filename, with the directory and ".exr" removed.
-    string inputName = config.inputFilenames[0];
-    inputName = basename(inputName);
-    inputName = setExtension(inputName, "");
-    outputName = subst(outputName, "<inputname>", inputName);
-
-    // <frame>: the input filename's frame number, given a "abcdef.1234.exr" filename.
-    // It would be nice if there was an EXR attribute contained the frame number.
-    outputName = subst(outputName, "<frame>", GetFrameNumberFromFilename(config.inputFilenames[0]));
-
-    static bool warned = false;
-    if(!warned && outputName == originalOutputName)
-    {
-        // If the output filename hasn't changed, there are no substitutions in it, which
-        // means we'll write a single file over and over.  That's probably not what was
-        // wanted.
-        fprintf(stderr, "Warning: output path \"%s\" doesn't contain any substitutions, so only one file will be written.\n", outputName.c_str());
-        fprintf(stderr, "Try \"%s\" instead.\n", (outputName + "_<name>.exr").c_str());
-        warned = true;
-    }
-
-    return outputName;
-}
-
-void FlattenFiles::SeparateLayers(Config config, shared_ptr<const DeepImage> image, vector<Layer> &layers)
-{
-    // If no layer was specified for the default object ID, add one at the beginning.
-    {
-	bool hasDefaultObjectId = false;
-	for(auto layer: config.layers)
-	    if(layer.objectId == DeepImageUtil::NO_OBJECT_ID)
-		hasDefaultObjectId = true;
-
-	if(!hasDefaultObjectId)
-	{
-	    Config::LayerDesc layerDesc;
-	    layerDesc.objectId = 0;
-	    layerDesc.layerName = "default";
-	    config.layers.insert(config.layers.begin(), layerDesc);
-	}
-    }
-
-    // Create the layer ordering.  This just maps each layer's object ID to its position in
-    // the layer list.
-    map<int,int> layerOrder;
-    {
-	int next = 0;
-	for(auto layer: config.layers)
-	    layerOrder[layer.objectId] = next++;
-    }
-
-    // Collapse any object IDs that aren't associated with layers into the default layer
-    // to use with layer separation.
-    shared_ptr<TypedDeepImageChannel<uint32_t>> collapsedId(image->GetChannel<uint32_t>("id")->Clone());
-    for(int y = 0; y < image->height; y++)
-    {
-	for(int x = 0; x < image->width; x++)
-	{
-	    for(int s = 0; s < image->NumSamples(x, y); ++s)
-	    {
-		uint32_t value = collapsedId->Get(x,y,s);
-		if(layerOrder.find(value) == layerOrder.end())
-		    collapsedId->Get(x,y,s) = DeepImageUtil::NO_OBJECT_ID;
-	    }
-	}
-    }
-
-    // Combine layers.  This just changes the object IDs of samples, so we don't need to re-sort.
-    for(auto combine: config.combines)
-	DeepImageUtil::CombineObjectId(collapsedId, combine.second, combine.first);
-
-    // Separate the image into layers.
-    int nextOrder = 1;
-    auto getLayer = [&image, &layers, &nextOrder, &config](string layerName, string layerType, int width, int height, bool ordered)
-    {
-	layers.push_back(Layer(width, height));
-	Layer &layer = layers.back();
-	layer.layerName = layerName;
-	layer.layerType = layerType;
-	if(ordered)
-	    layer.order = nextOrder++;
-
-	// Copy all image attributes, except for built-in EXR headers that we shouldn't set.
-	DeepImageUtil::CopyLayerAttributes(image->header, layer.image->header);
-
-	layer.filename = MakeOutputFilename(config, layer);
-
-	return layer.image;
-    };
-
-    for(auto layerDesc: config.layers)
-    {
-	// Skip this layer if we've removed it from layerOrder.
-	if(layerOrder.find(layerDesc.objectId) == layerOrder.end())
-	    continue;
-
-	string layerName = layerDesc.layerName;
-
-	auto colorOut = getLayer(layerName, "color", image->width, image->height, true);
-	DeepImageUtil::SeparateLayer(image, collapsedId, layerDesc.objectId, colorOut, layerOrder, nullptr);
-
-	for(auto maskDesc: config.masks)
-	{
-	    auto mask = image->GetChannel<float>(maskDesc.maskChannel);
-	    if(mask == nullptr)
-		continue;
-
-	    auto maskOut = getLayer(layerName, maskDesc.maskName, image->width, image->height, false);
-	    if(maskDesc.maskType == Config::MaskDesc::MaskType_Composited)
-    		DeepImageUtil::SeparateLayer(image, collapsedId, layerDesc.objectId, maskOut, layerOrder, mask);
-	    else
-	    {
-		bool useAlpha = maskDesc.maskType == Config::MaskDesc::MaskType_Alpha;
-		auto rgba = image->GetChannel<V4f>("rgba");
-		DeepImageUtil::ExtractMask(useAlpha, false, mask, rgba, collapsedId, layerDesc.objectId, maskOut);
-	    }
-	}
-    }
-
-    if(config.saveFlattenedLayer)
-    {
-	auto combinedOut = getLayer("main", "color", image->width, image->height, false);
-	layers.back().image = DeepImageUtil::CollapseEXR(image);
-    }
-}
 
 bool FlattenFiles::flatten(Config config)
 {
     vector<shared_ptr<DeepImage>> images;
-    for(string inputFilename: config.inputFilenames)
+    for(string inputFilename: config.sharedConfig.inputFilenames)
     {
 	DeepImageReader reader;
 	shared_ptr<DeepImage> image = reader.Open(inputFilename);
@@ -388,20 +527,8 @@ bool FlattenFiles::flatten(Config config)
 	image->AddChannelToFramebuffer<V3f>("P", { "P.X", "P.Y", "P.Z" }, frameBuffer, true);
 	image->AddChannelToFramebuffer<V3f>("N", { "N.X", "N.Y", "N.Z" }, frameBuffer, true);
 
-	// Also read channels used by masks.
-	for(auto maskDesc: config.masks)
-    	    image->AddChannelToFramebuffer<float>(maskDesc.maskChannel, { maskDesc.maskChannel }, frameBuffer, true);
-
-	for(auto createMaskDesc: config.createMasks)
-	    createMaskDesc.AddLayers(image, frameBuffer);
-
-	for(auto strokeDesc: config.strokes)
-	{
-	    if(!strokeDesc.strokeMaskChannel.empty())
-		image->AddChannelToFramebuffer<float>(strokeDesc.strokeMaskChannel, { strokeDesc.strokeMaskChannel }, frameBuffer, true);
-	    if(!strokeDesc.intersectionMaskChannel.empty())
-		image->AddChannelToFramebuffer<float>(strokeDesc.intersectionMaskChannel, { strokeDesc.intersectionMaskChannel }, frameBuffer, true);
-	}
+	for(auto op: config.operations)
+	    op->AddChannels(image, frameBuffer);
 
 	reader.Read(frameBuffer);
 	images.push_back(image);
@@ -427,30 +554,9 @@ bool FlattenFiles::flatten(Config config)
     // of "tidying", splitting samples where they overlap using splitVolumeSample.
     DeepImageUtil::SortSamplesByDepth(image);
 
-    // Apply strokes to layers.
-    for(auto stroke: config.strokes)
-	DeepImageStroke::AddStroke(stroke, image);
+    for(auto op: config.operations)
+	op->Run(image);
 
-    // If we stroked any objects, re-sort samples, since new samples may have been added.
-    if(!config.strokes.empty())
-	DeepImageUtil::SortSamplesByDepth(image);
-
-    for(const auto &createMask: config.createMasks)
-	createMask.Create(image);
-
-    vector<Layer> layers;
-    SeparateLayers(config, image, layers);
-
-    // Write the layers.
-    for(const auto &layer: layers)
-    {
-	// Don't write this layer if it's completely empty.
-	if(layer.image->IsEmpty())
-	    continue;
-	
-	printf("Writing %s\n", layer.filename.c_str());
-        layer.image->WriteEXR(layer.filename);
-    }
     return true;
 }
 
@@ -463,12 +569,15 @@ int main(int argc, char **argv)
 	{"output", required_argument, NULL, 'o'},
 	{"filename", required_argument, NULL, 'f'},
 	{"layer", required_argument, NULL, 0},
-	{"mask", required_argument, NULL, 0},
+	{"layer-mask", required_argument, NULL, 0},
 	{"create-mask", required_argument, NULL, 0},
+	{"save-flattened", required_argument, NULL, 0},
+	{"save-layers", no_argument, NULL, 0},
 	{0},
     };
 
     Config config;
+    vector<pair<string,string>> accumulatedOptions;
     while(1)
     {
 	    int index = -1;
@@ -478,24 +587,29 @@ int main(int argc, char **argv)
 	    switch( c )
 	    {
 	    case 0:
-		config.ParseOption(opts[index].name, optarg? optarg:"");
+		config.ParseOption(opts[index].name, optarg? optarg:"", accumulatedOptions);
 		break;
 	    case 'i':
-		config.inputFilenames.push_back(optarg);
+		config.sharedConfig.inputFilenames.push_back(optarg);
 		break;
 	    case 'o':
-		config.outputPath = optarg;
+		config.sharedConfig.outputPath = optarg;
 		break;
 	    case 'f':
-		config.outputPattern = optarg;
+		config.ParseOption("filename", optarg? optarg:"", accumulatedOptions);
 		break;
 	    }
     }
 
-    if(config.inputFilenames.empty()) {
+    if(config.sharedConfig.inputFilenames.empty()) {
 	fprintf(stderr, "Usage: exrflatten [--combine src,dst ...] -i input.exr [-i input2.exr ...] [-o output path] [-f filename pattern.exr]\n");
 	return 1;
     }
+
+    // If there are any accumulatedOptions left that weren't used by an operation, warn
+    // about it.
+    for(auto it: accumulatedOptions)
+	printf("Warning: unused option %s\n", it.first.c_str());
 
     try {
 	if(!FlattenFiles::flatten(config))

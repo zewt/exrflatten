@@ -108,6 +108,7 @@
     <ClInclude Include="DeepImage.h" />
     <ClInclude Include="DeepImageMasks.h" />
     <ClInclude Include="DeepImageUtil.h" />
+    <ClInclude Include="EXROperation.h" />
     <ClInclude Include="exrsamples.h" />
     <ClInclude Include="getopt.h" />
     <ClInclude Include="helpers.h" />

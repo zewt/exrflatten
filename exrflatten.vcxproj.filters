@@ -20,5 +20,6 @@
     <ClInclude Include="SimpleImage.h" />
     <ClInclude Include="DeepImageStroke.h" />
     <ClInclude Include="DeepImageMasks.h" />
+    <ClInclude Include="EXROperation.h" />
   </ItemGroup>
 </Project>
