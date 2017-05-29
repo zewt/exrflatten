@@ -233,3 +233,18 @@ shared_ptr<TypedDeepImageChannel<float>> CreateMask::CreateDistance(shared_ptr<D
     }
     return outputMask;
 }
+
+EXROperation_CreateMask::EXROperation_CreateMask(string args)
+{
+    createMask.ParseOptionsString(args);
+}
+
+void EXROperation_CreateMask::Run(shared_ptr<DeepImage> image) const
+{
+    createMask.Create(image);
+}
+
+void EXROperation_CreateMask::AddChannels(shared_ptr<DeepImage> image, DeepFrameBuffer &frameBuffer) const
+{
+    createMask.AddLayers(image, frameBuffer);
+}

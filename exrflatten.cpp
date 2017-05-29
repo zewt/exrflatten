@@ -20,6 +20,9 @@
 #include "DeepImageUtil.h"
 #include "helpers.h"
 
+#include "EXROperation.h"
+#include "EXROperation_WriteLayers.h"
+
 using namespace std;
 using namespace Imf;
 using namespace Imath;
@@ -37,9 +40,6 @@ using namespace Iex;
 // - separate per-color alpha (RA, GA, BA)
 // - (and lots of other stuff, EXR is "too general")
 
-
-#include "EXROperation.h"
-#include "EXROperation_WriteLayers.h"
 
 // Collapse the image to a flat file, and save a non-deep EXR.
 class EXROperation_SaveFlattenedImage: public EXROperation
@@ -72,58 +72,6 @@ private:
 
     string filename;
     const SharedConfig &sharedConfig;
-};
-
-// Use DeepImageStroke to add a stroke.
-class EXROperation_Stroke: public EXROperation
-{
-public:
-    EXROperation_Stroke(string args)
-    {
-	strokeDesc.ParseOptionsString(args);
-    }
-
-    void Run(shared_ptr<DeepImage> image) const
-    {
-	DeepImageStroke::AddStroke(strokeDesc, image);
-
-	// Re-sort samples, since new samples may have been added.
-	DeepImageUtil::SortSamplesByDepth(image);
-    }
-
-    void AddChannels(shared_ptr<DeepImage> image, DeepFrameBuffer &frameBuffer) const
-    {
-	if(!strokeDesc.strokeMaskChannel.empty())
-	    image->AddChannelToFramebuffer<float>(strokeDesc.strokeMaskChannel, { strokeDesc.strokeMaskChannel }, frameBuffer, true);
-	if(!strokeDesc.intersectionMaskChannel.empty())
-	    image->AddChannelToFramebuffer<float>(strokeDesc.intersectionMaskChannel, { strokeDesc.intersectionMaskChannel }, frameBuffer, true);
-    }
-
-private:
-    DeepImageStroke::Config strokeDesc;
-};
-
-// Use CreateMask to create a mask and add it as an EXR channel.
-class EXROperation_CreateMask: public EXROperation
-{
-public:
-    EXROperation_CreateMask(string args)
-    {
-	createMask.ParseOptionsString(args);
-    }
-
-    void Run(shared_ptr<DeepImage> image) const
-    {
-	createMask.Create(image);
-    }
-
-    void AddChannels(shared_ptr<DeepImage> image, DeepFrameBuffer &frameBuffer) const
-    {
-	createMask.AddLayers(image, frameBuffer);
-    }
-
-private:
-    CreateMask createMask;
 };
 
 struct Config

@@ -62,4 +62,18 @@ private:
     shared_ptr<TypedDeepImageChannel<float>> CreateDistance(shared_ptr<DeepImage> image) const;
 };
 
+// Use CreateMask to create a mask and add it as an EXR channel.
+#include "EXROperation.h"
+class EXROperation_CreateMask: public EXROperation
+{
+public:
+    EXROperation_CreateMask(string args);
+    void Run(shared_ptr<DeepImage> image) const;
+    void AddChannels(shared_ptr<DeepImage> image, Imf::DeepFrameBuffer &frameBuffer) const;
+
+private:
+    CreateMask createMask;
+};
+
+
 #endif

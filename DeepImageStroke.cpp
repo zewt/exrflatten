@@ -523,6 +523,27 @@ void DeepImageStroke::Config::ParseOptionsString(string optionsString)
     }
 }
 
+EXROperation_Stroke::EXROperation_Stroke(string args)
+{
+    strokeDesc.ParseOptionsString(args);
+}
+
+void EXROperation_Stroke::Run(shared_ptr<DeepImage> image) const
+{
+    DeepImageStroke::AddStroke(strokeDesc, image);
+
+    // Re-sort samples, since new samples may have been added.
+    DeepImageUtil::SortSamplesByDepth(image);
+}
+
+void EXROperation_Stroke::AddChannels(shared_ptr<DeepImage> image, DeepFrameBuffer &frameBuffer) const
+{
+    if(!strokeDesc.strokeMaskChannel.empty())
+	image->AddChannelToFramebuffer<float>(strokeDesc.strokeMaskChannel, { strokeDesc.strokeMaskChannel }, frameBuffer, true);
+    if(!strokeDesc.intersectionMaskChannel.empty())
+	image->AddChannelToFramebuffer<float>(strokeDesc.intersectionMaskChannel, { strokeDesc.intersectionMaskChannel }, frameBuffer, true);
+}
+
 /*
  * Based on https://github.com/vinniefalco/LayerEffects/blo
  *

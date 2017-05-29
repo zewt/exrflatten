@@ -51,4 +51,17 @@ namespace DeepImageStroke
     void ApplyStrokeUsingMask(const DeepImageStroke::Config &config, shared_ptr<DeepImage> image, shared_ptr<SimpleImage> mask);
 }
 
+// Use DeepImageStroke to add a stroke.
+#include "EXROperation.h"
+class EXROperation_Stroke: public EXROperation
+{
+public:
+    EXROperation_Stroke(string args);
+    void Run(shared_ptr<DeepImage> image) const;
+    void AddChannels(shared_ptr<DeepImage> image, Imf::DeepFrameBuffer &frameBuffer) const;
+
+private:
+    DeepImageStroke::Config strokeDesc;
+};
+
 #endif
