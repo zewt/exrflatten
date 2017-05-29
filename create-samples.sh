@@ -74,7 +74,7 @@ exrflatten \
 exrflatten \
     --input=sample/sample2.exr \
     --output=output \
-    --stroke="id=2" \
+    --stroke=2 \
     --save-layers \
         --filename-pattern="04 - stroke sample - <inputname> <ordername> <layer>.exr"
 
@@ -84,7 +84,7 @@ exrflatten \
 exrflatten \
     --input=sample/sample2.exr \
     --output=output \
-    --stroke="id=2;intersections" \
+    --stroke=2 --intersections \
     --save-layers \
         --filename-pattern="05 - stroke with intersections - <inputname> <ordername> <layer>.exr"
 
@@ -93,7 +93,7 @@ exrflatten \
 exrflatten \
     --input=sample/sample2.exr \
     --output=output \
-    --stroke="id=2;intersections" \
+    --stroke=2 --intersections \
     --save-layers \
         --layer=2=TwistedCylinder \
         --filename-pattern="06 - stroke layer sample - <inputname> <ordername> <layer>.exr"
@@ -107,7 +107,7 @@ exrflatten \
 exrflatten \
     --input=sample/sample2.exr \
     --output=output \
-    --stroke="id=2;intersections;output-id=1000" \
+    --stroke=2 --intersections --output-id=1000 \
     --save-layers \
         --layer=2=Bend \
         --layer=1000=BendStroke \
@@ -124,7 +124,7 @@ exrflatten \
 exrflatten \
     --input=sample/sample2.exr \
     --output=output \
-    --create-mask="type=depth;name=MaskLayer;normalize" \
+    --create-mask=depth --name=MaskLayer --normalize \
     --save-layers \
         --filename-pattern="08 - depth mask (grey) - <inputname> <ordername> <layer>.exr" \
         --layer-mask="channel=MaskLayer;name=Mask"
@@ -134,7 +134,7 @@ exrflatten \
 exrflatten \
     --input=sample/sample2.exr \
     --output=output \
-    --create-mask="type=depth;name=MaskLayer;normalize" \
+    --create-mask=depth --name=MaskLayer --normalize \
     --save-layers \
         --filename-pattern="09 - depth mask (a) - <inputname> <ordername> <layer>.exr" \
         --layer-mask="channel=MaskLayer;name=Mask;alpha" 
@@ -145,7 +145,7 @@ exrflatten \
 exrflatten \
     --input=sample/sample2.exr \
     --output=output \
-    --create-mask="type=depth;name=MaskLayer;normalize" \
+    --create-mask=depth --name=MaskLayer --normalize \
     --save-layers \
         --filename-pattern="10 - depth mask (rgb) - <inputname> <ordername> <layer>.exr" \
         --layer-mask="channel=MaskLayer;name=Mask;rgb" 
@@ -155,7 +155,7 @@ exrflatten \
 exrflatten \
     --input=sample/sample2.exr \
     --output=output \
-    --create-mask="type=facing;name=MaskLayer;normalize" \
+    --create-mask=facing --name=MaskLayer --normalize \
     --save-layers \
         --filename-pattern="11 - facing mask - <inputname> <ordername> <layer>.exr" \
         --layer-mask="channel=MaskLayer;name=Mask" 
@@ -165,7 +165,7 @@ exrflatten \
 exrflatten \
     --input=sample/sample2.exr \
     --output=output \
-    --create-mask="type=distance;name=MaskLayer;normalize;pos=1.115=5.771=3.643" \
+    --create-mask=distance --name=MaskLayer --normalize --pos=1.115,5.771,3.643 \
     --save-layers \
         --layer-mask="channel=MaskLayer;name=Mask" \
         --filename-pattern="12 - distance mask - <inputname> <ordername> <layer>.exr" \
@@ -175,7 +175,7 @@ exrflatten \
 
 # We can create a mask, and then use it on a stroke.  This creates a mask around a point
 # on the TwistedCylinder, and then uses it to mask where we apply a stroke on the object.
-# It's important that --create-mask=be before --stroke, since operations are run in the
+# It's important that --create-mask be before --stroke, since operations are run in the
 # order they're given and we need to make the mask first.  Also note that strokes and other
 # operations can't update masks created earlier, so the mask won't have useful values after
 # the stroke is created and shouldn't be written with --layer-mask.  If you want to create
@@ -183,8 +183,8 @@ exrflatten \
 exrflatten \
     --input=sample/sample2.exr \
     --output=output \
-    --create-mask="type=distance;name=MaskLayer;min=0;max=1;pos=-0.462=5.308=-6.169;invert" \
-    --stroke="id=2;stroke-mask=MaskLayer" \
+    --create-mask=distance --name=MaskLayer --min=0 --max=1 --pos=-0.462,5.308,-6.169 --invert \
+    --stroke=2 --stroke-mask=MaskLayer \
     --save-layers \
         --filename-pattern="13 - depth mask (a) - <inputname> <ordername> <layer>.exr" \
     
@@ -197,9 +197,9 @@ exrflatten \
 exrflatten \
     --input=sample/sample2.exr \
     --output=output \
-    --stroke="id=1" \
+    --stroke=1 \
     --save-flattened="14 - flat 1.exr" \
-    --stroke="id=2" \
+    --stroke=2 \
     --save-flattened="14 - flat 2.exr"
 
 

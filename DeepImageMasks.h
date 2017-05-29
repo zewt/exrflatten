@@ -13,8 +13,6 @@ using namespace std;
 // This creates simple monochrome masks from various things in a deep EXR file.
 struct CreateMask
 {
-    void ParseOptionsString(string optionsString);
-
     enum Mode
     {
 	CreateMaskMode_FacingAngle,
@@ -68,6 +66,7 @@ class EXROperation_CreateMask: public EXROperation
 {
 public:
     EXROperation_CreateMask(string args);
+    bool AddArgument(string opt, string value);
     void Run(shared_ptr<DeepImage> image) const;
     void AddChannels(shared_ptr<DeepImage> image, Imf::DeepFrameBuffer &frameBuffer) const;
 

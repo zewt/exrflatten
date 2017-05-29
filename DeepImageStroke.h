@@ -15,8 +15,6 @@ namespace DeepImageStroke
 {
     struct Config
     {
-	void ParseOptionsString(string options);
-
 	int objectId = 0;
 	int outputObjectId = -1;
 	float radius = 1.0f;
@@ -57,6 +55,7 @@ class EXROperation_Stroke: public EXROperation
 {
 public:
     EXROperation_Stroke(string args);
+    bool AddArgument(string opt, string value);
     void Run(shared_ptr<DeepImage> image) const;
     void AddChannels(shared_ptr<DeepImage> image, Imf::DeepFrameBuffer &frameBuffer) const;
 

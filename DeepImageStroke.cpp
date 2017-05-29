@@ -488,44 +488,36 @@ static V4f ParseColor(const string &str)
     return rgba;
 }
 
-// --stroke="id=1000;radius=1;color=#000000;intersections;intersection-min-depth=1;intersection-fade=1;"
-void DeepImageStroke::Config::ParseOptionsString(string optionsString)
+bool EXROperation_Stroke::AddArgument(string opt, string value)
 {
-    vector<string> options;
-    split(optionsString, ";", options);
-    for(string option: options)
-    {
-	vector<string> args;
-	split(option, "=", args);
-	if(args.size() < 1)
-	    continue;
+    if(opt == "output-id")
+	strokeDesc.outputObjectId = atoi(value.c_str());
+    else if(opt == "radius")
+	strokeDesc.radius = (float) atof(value.c_str());
+    else if(opt == "fade")
+	strokeDesc.fade = (float) atof(value.c_str());
+    else if(opt == "color")
+	strokeDesc.strokeColor = ParseColor(value);
+    else if(opt == "stroke-mask")
+	strokeDesc.strokeMaskChannel = value;
+    else if(opt == "intersection-mask")
+	strokeDesc.intersectionMaskChannel = value;
+    else if(opt == "intersections")
+	strokeDesc.strokeIntersections = true;
+    else if(opt == "intersection-min-distance")
+	strokeDesc.intersectionMinDistance = (float) atof(value.c_str());
+    else if(opt == "intersection-fade")
+	strokeDesc.intersectionFade = (float) atof(value.c_str());
+    else
+	return false;
 
-	if(args[0] == "id" && args.size() > 1)
-	    objectId = atoi(args[1].c_str());
-	else if(args[0] == "output-id" && args.size() > 1)
-	    outputObjectId = atoi(args[1].c_str());
-	else if(args[0] == "radius" && args.size() > 1)
-	    radius = (float) atof(args[1].c_str());
-	else if(args[0] == "fade" && args.size() > 1)
-	    fade = (float) atof(args[1].c_str());
-	else if(args[0] == "color" && args.size() > 1)
-	    strokeColor = ParseColor(args[1]);
-	else if(args[0] == "stroke-mask" && args.size() > 1)
-	    strokeMaskChannel = args[1];
-	else if(args[0] == "intersection-mask" && args.size() > 1)
-	    intersectionMaskChannel = args[1];
-	else if(args[0] == "intersections")
-	    strokeIntersections = true;
-	else if(args[0] == "intersection-min-distance")
-	    this->intersectionMinDistance = (float) atof(args[1].c_str());
-	else if(args[0] == "intersection-fade")
-	    this->intersectionFade = (float) atof(args[1].c_str());
-    }
+    return true;
 }
 
+// --stroke=1000
 EXROperation_Stroke::EXROperation_Stroke(string args)
 {
-    strokeDesc.ParseOptionsString(args);
+    strokeDesc.objectId = atoi(args.c_str());
 }
 
 void EXROperation_Stroke::Run(shared_ptr<DeepImage> image) const

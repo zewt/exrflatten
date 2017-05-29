@@ -9,56 +9,6 @@
 using namespace Imf;
 using namespace Imath;
 
-void CreateMask::ParseOptionsString(string optionsString)
-{
-    vector<string> options;
-    split(optionsString, ";", options);
-    for(string option: options)
-    {
-	vector<string> args;
-	split(option, "=", args);
-	if(args.size() < 1)
-	    continue;
-
-	auto getVectorArg = [&args] {
-	    if(args.size() < 4)
-		return V3f(0,0,0);
-	    return V3f(
-		float(atof(args[1].c_str())),
-		float(atof(args[2].c_str())),
-		float(atof(args[3].c_str())));
-	};
-	if(args[0] == "type" && args.size() > 1)
-	{
-	    string type = args[1];
-	    if(type == "facing")
-		mode = CreateMaskMode_FacingAngle;
-	    else if(type == "depth")
-		mode = CreateMaskMode_Depth;
-	    else if(type == "distance")
-		mode = CreateMaskMode_Distance;
-	}
-	else if(args[0] == "name" && args.size() > 1)
-	    outputChannelName = args[1];
-	else if(args[0] == "src" && args.size() > 1)
-	    srcLayer = args[1];
-	else if(args[0] == "min" && args.size() > 1)
-	    minValue = float(atof(args[1].c_str()));
-	else if(args[0] == "max" && args.size() > 1)
-	    maxValue = float(atof(args[1].c_str()));
-	else if(args[0] == "noclamp")
-	    clamp = false;
-	else if(args[0] == "invert")
-	    invert = true;
-	else if(args[0] == "normalize")
-	    normalize = true;
-	else if(args[0] == "angle" && args.size() > 3)
-	    angle = getVectorArg();
-	else if(args[0] == "pos" && args.size() > 3)
-	    pos = getVectorArg();
-    }
-}
-
 // Get the layer we'll read if one isn't specified.
 string CreateMask::GetSrcLayer() const
 {
@@ -236,7 +186,54 @@ shared_ptr<TypedDeepImageChannel<float>> CreateMask::CreateDistance(shared_ptr<D
 
 EXROperation_CreateMask::EXROperation_CreateMask(string args)
 {
-    createMask.ParseOptionsString(args);
+    if(args == "facing")
+	createMask.mode = CreateMask::CreateMaskMode_FacingAngle;
+    else if(args == "depth")
+	createMask.mode = CreateMask::CreateMaskMode_Depth;
+    else if(args == "distance")
+	createMask.mode = CreateMask::CreateMaskMode_Distance;
+    else
+	throw exception("Unknown --create-mask type");
+}
+
+bool EXROperation_CreateMask::AddArgument(string opt, string value)
+{
+    auto getVectorArg = [&value] {
+	vector<string> args;
+	split(value, ",", args);
+	if(args.size() < 3)
+	    return V3f(0,0,0);
+	return V3f(
+	    float(atof(args[0].c_str())),
+	    float(atof(args[1].c_str())),
+	    float(atof(args[2].c_str())));
+    };
+
+    // The type of the mask is in the --create-mask argument, which lets us check
+    // that options aren't being used that don't apply to this mask type, but this
+    // isn't currently done.
+    if(opt == "name")
+	createMask.outputChannelName = value;
+    else if(opt == "src")
+	createMask.srcLayer = value;
+    else if(opt == "min")
+	createMask.minValue = float(atof(value.c_str()));
+    else if(opt == "max")
+	createMask.maxValue = float(atof(value.c_str()));
+    else if(opt == "noclamp")
+	createMask.clamp = false;
+    else if(opt == "invert")
+	createMask.invert = true;
+    else if(opt == "normalize")
+	createMask.normalize = true;
+    else if(opt == "angle")
+	createMask.angle = getVectorArg();
+    else if(opt == "pos")
+	createMask.pos = getVectorArg();
+    else
+	return false;
+
+    return true;
 }
 
 void EXROperation_CreateMask::Run(shared_ptr<DeepImage> image) const

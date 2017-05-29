@@ -83,16 +83,16 @@ occluded by objects closer to the camera.
 Intersection lines can also be added, to add ink lines where an object intersects itself
 in the same layer.  This is done with world space-based edge detection.
 
-The [--stroke](#operation--stroke) argument adds strokes:
+The [--stroke](#operation--stroke) command adds strokes:
 
---stroke="id=1;radius=1;intersections"
+--stroke=1 --radius=1 --intersections"
 
 - id specifies the object ID to stroke.  This is the only required argument.
 - radius sets the thickness of the stroke.
 - If "intersections" is present, intersection lines will be drawn.  Otherwise, only a regular
 stroke will be drawn.
 
-For a complete list of arguments to --stroke, see [--stroke](#operation---stroke).
+See [--stroke](#operation---stroke) for a complete list of arguments.
 
 Intersection lines have some limitations:
 
@@ -108,11 +108,11 @@ By default, a stroke is applied to the whole object.  You can control which part
 have an outline with a stroke mask.  This can be generated with [--create-mask](#operation---create-mask),
 or a channel in the input EXR file can be used.  For example:
 
-``--stroke="id=1;stroke-mask=StrokeMask"``
+``--stroke=1 --stroke-mask=StrokeMask``
 
 A mask can also be used to control intersection lines:
 
-``--stroke="id=1;intersections;intersection-mask=IntersectionMask"``
+``--stroke=1 --intersections --intersection-mask=IntersectionMask``
 
 Areas which are black in the mask won't generate a stroke.  The same mask can be used for both
 strokes and intersections, or you can use a separate mask for each.
@@ -122,12 +122,12 @@ strokes and intersections, or you can use a separate mask for each.
 By default, strokes are added to the layer they're on.  Strokes can also be output into a
 new layer, by specifying an output-id:
 
-``--stroke=id=1;output-id=2``
+``--stroke=1 --output-id=2``
 
 This will read object ID 1, and output the stroke as object ID 2.  To output it into its
 own file, you also need to include this object ID as a layer:
 
-``--layer=2=ObjectStroke``
+``--save-layers --layer=2=ObjectStroke``
 
 The stroke will then be output as a separate layer.  This makes it easy to mask the stroke
 further during compositing.
@@ -299,51 +299,53 @@ masks.
 **--create-mask** generates a mask from other channels in the input image.  The mask can then
 be used with other commands, like [--save-layers](#operation---save-layers) and [--stroke](#operation--stroke).
 
-The argument to **--create-mask** specifies how to create the mask, and is a semicolon-separated
-list of arguments.  The only required argument is **type**.
+The argument to **--create-mask** is the mask mode:
 
-- **name=MaskName** Set the name of the mask to create.  This argument is required.
-- **type=facing** Generate a facing angle mask using normals and the camera position.
-- **type=depth** Generate a mask from camera depth.
-- **type=distance** Generate a mask based on distance from a given point.
-- **src=SourceLayer** Specify the EXR layer to read.  By default, a layer is chosen based
-on the type.
-- **min=1** **max=10** Specify the minimum and maximum value for the mask.  For depth, this
-is the depth range from the camera.  For distance, this specifies the nearest and furthest
-distance for the mask.  Values out of this range will be clamped to 0-1.
-- **noclamp** If set, values won't be clamped to the 0-1 range.
-- **invert** If set, invert black and white in the map.
-- **normalize** Automatically normalize the map, so the smallest value is black and the highest
-value is white.
-- **angle=1=0=0** For type=facing, set the direction to measure the angle from.  By default,
-this is 1,0,-1, which is towards the camera.  This can be used to create a mask for surfaces
-facing in a particular direction.
-- **pos=0=0=0** For type=distance, set the world space point to measure from.
-
-### Operation: --stroke
-
-Add a stroke to the image, with optional intersection lines.
+- **--create-mask=facing** Generate a facing angle mask using normals and the camera position.
+- **--create-mask=depth** Generate a mask from camera depth.
+- **--create-mask=distance** Generate a mask based on distance from a given point.
 
 This command takes the following options:
 
-- **id=1** The object ID to stroke.
-- **output-id=1** The object ID to write the stroke to.  By default, the stroke is written to the
-same ID as it's read.
-- **radius=1** The radius of the stroke.  Higher values make the outline thicker.
-- **fade** The radius of the stroke fade-off.  Higher values make the outline fade out over
+- **--name=MaskName** Set the name of the mask to create.  This argument is required.
+- **--src=SourceLayer** Specify the EXR layer to read.  By default, a layer is chosen based
+on the type.
+- **--min=1** **--max=10** Specify the minimum and maximum value for the mask.  For depth, this
+is the depth range from the camera.  For distance, this specifies the nearest and furthest
+distance for the mask.  Values out of this range will be clamped to 0-1.
+- **--noclamp** If set, values won't be clamped to the 0-1 range.
+- **--invert** If set, invert black and white in the map.
+- **--normalize** Automatically normalize the map, so the smallest value is black and the highest
+value is white.
+- **--angle=1,0,0** For type=facing, set the direction to measure the angle from.  By default,
+this is 1,0,-1, which is towards the camera.  This can be used to create a mask for surfaces
+facing in a particular direction.
+- **--pos=0,0,0** For type=distance, set the world space point to measure from.
+
+### Operation: --stroke
+
+Add a stroke to the image, with optional intersection lines.  The argument to --stroke is an
+object ID: **--stroke=1**.
+
+This command takes the following options:
+
+- **--radius=1** The radius of the stroke.  Higher values make the outline thicker.
+- **--fade=1** The radius of the stroke fade-off.  Higher values make the outline fade out over
 a larger area.
-- **color=#000000** The color of the stroke.
-- **intersections** If present, include intersection lines.  This requires a world space
+- **--color=#000000** The color of the stroke.
+- **--intersections** If present, include intersection lines.  This requires a world space
 position channel named "P".
-- **stroke-mask=MaskName** The name of a mask for the stroke.  This allows preventing the stroke from
+- **--stroke-mask=MaskName** The name of a mask for the stroke.  This allows preventing the stroke from
 being drawn on some parts of the image.
-- **intersection-mask=MaskName** The name of a mask for intersection lines.  This may be the same as
+- **--intersection-mask=MaskName** The name of a mask for intersection lines.  This may be the same as
 **stroke-mask**.
-- **intersection-min-distance=1** The minimum distance between two samples before intersection
+- **--intersection-min-distance=1** The minimum distance between two samples before intersection
 lines begin appearing.  This is at a distance of 1000 units, and is adjusted for objects
 nearer or farther.
-- **intersection-fade=1** The distance after **intersection-min-distance** for intersection
+- **--intersection-fade=1** The distance after **intersection-min-distance** for intersection
 lines to fully appear.
+- **--output-id=1** The object ID to write the stroke to.  By default, the stroke is written to the
+same ID as it's read.
 
 # Limitations
 
