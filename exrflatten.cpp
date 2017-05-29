@@ -3,7 +3,6 @@
 #include <assert.h>
 #include <math.h>
 #include <limits.h>
-#include "getopt.h"
 
 #include <algorithm>
 #include <functional>
@@ -138,7 +137,17 @@ struct Config
 
 bool Config::ParseOption(string opt, string value)
 {
-    if(opt == "save-layers")
+    if(opt == "input")
+    {
+	sharedConfig.inputFilenames.push_back(value);
+	return true;
+    }
+    else if(opt == "output")
+    {
+	sharedConfig.outputPath = value;
+	return true;
+    }
+    else if(opt == "save-layers")
     {
 	operations.push_back(make_shared<EXROperation_WriteLayers>(sharedConfig));
 	return true;
@@ -217,45 +226,39 @@ void Config::Run() const
 	op->Run(image);
 }
 
+vector<pair<string,string>> GetArgs(int argc, char **argv)
+{
+    vector<pair<string,string>> results;
+    for(int i = 1; i < argc; ++i)
+    {
+	string option = argv[i];
+	if(option.substr(0, 2) != "--")
+	    continue;
+	option = option.substr(2);
+
+	string argument;
+	int pos = option.find('=');
+	if(pos != string::npos)
+	{
+	    argument = option.substr(pos+1);
+	    option = option.substr(0, pos);
+	}
+
+	results.push_back(make_pair(option, argument));
+    }
+
+    return results;
+}
+
 int main(int argc, char **argv)
 {
-    // XXX: This getopt-style option list doesn't scale.
-    option opts[] = {
-	{"input", required_argument, NULL, 'i'},
-	{"output", required_argument, NULL, 'o'},
-	{"stroke", required_argument, NULL, 0},
-	{"combine", required_argument, NULL, 0},
-	{"filename-pattern", required_argument, NULL, 0},
-	{"layer", required_argument, NULL, 0},
-	{"layer-mask", required_argument, NULL, 0},
-	{"create-mask", required_argument, NULL, 0},
-	{"save-flattened", required_argument, NULL, 0},
-	{"save-layers", no_argument, NULL, 0},
-	{0},
-    };
+    vector<pair<string,string>> args = GetArgs(argc, argv);
 
     Config config;
-    vector<pair<string,string>> accumulatedOptions;
-    while(1)
+    for(auto opt: args)
     {
-	    int index = -1;
-	    int c = getopt_long(argc, argv, "i:o:", opts, &index);
-	    if( c == -1 )
-		    break;
-	    switch( c )
-	    {
-	    case 0:
-		if(!config.ParseOption(opts[index].name, optarg? optarg:""))
-		    printf("Unrecognized argument: %s\n", opts[index].name);
-
-		break;
-	    case 'i':
-		config.sharedConfig.inputFilenames.push_back(optarg);
-		break;
-	    case 'o':
-		config.sharedConfig.outputPath = optarg;
-		break;
-	    }
+	if(!config.ParseOption(opt.first, opt.second))
+	    printf("Unrecognized argument: %s\n", opt.first.c_str());
     }
 
     if(config.sharedConfig.inputFilenames.empty()) {

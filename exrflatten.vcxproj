@@ -100,7 +100,6 @@
     <ClCompile Include="exrflatten.cpp" />
     <ClCompile Include="EXROperation_WriteLayers.cpp" />
     <ClCompile Include="exrsamples.cpp" />
-    <ClCompile Include="getopt.c" />
     <ClCompile Include="helpers.cpp" />
     <ClCompile Include="SimpleImage.cpp" />
     <ClCompile Include="DeepImageStroke.cpp" />
@@ -112,7 +111,6 @@
     <ClInclude Include="EXROperation.h" />
     <ClInclude Include="EXROperation_WriteLayers.h" />
     <ClInclude Include="exrsamples.h" />
-    <ClInclude Include="getopt.h" />
     <ClInclude Include="helpers.h" />
     <ClInclude Include="SimpleImage.h" />
     <ClInclude Include="DeepImageStroke.h" />
