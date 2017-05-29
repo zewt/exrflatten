@@ -254,6 +254,11 @@ void DeepImageStroke::ApplyStrokeUsingMask(const DeepImageStroke::Config &config
 		topColor += c;
 	}
 
+	// If the top color is completely opaque the stroke can't be seen at all, so
+	// don't output a sample for it.
+	if(topColor[3] >= 0.999f)
+	    return;
+
 	V4f strokeColor = config.strokeColor * alpha;
 	V4f mixedColor = topColor + strokeColor * (1-topColor[3]);
 
