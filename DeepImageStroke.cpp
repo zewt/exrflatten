@@ -446,29 +446,30 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 
 void DeepImageStroke::AddStroke(const DeepImageStroke::Config &config, shared_ptr<DeepImage> image)
 {
-    shared_ptr<TypedDeepImageChannel<float>> strokeMask;
+    // The user masks that control where we apply strokes and intersection lines:
+    shared_ptr<TypedDeepImageChannel<float>> strokeVisibilityMask;
     if(!config.strokeMaskChannel.empty())
-	strokeMask = image->GetChannel<float>(config.strokeMaskChannel);
+	strokeVisibilityMask = image->GetChannel<float>(config.strokeMaskChannel);
 
-    shared_ptr<TypedDeepImageChannel<float>> intersectionMask;
+    shared_ptr<TypedDeepImageChannel<float>> intersectionVisibilityMask;
     if(!config.intersectionMaskChannel.empty())
-	intersectionMask = image->GetChannel<float>(config.intersectionMaskChannel);
+	intersectionVisibilityMask = image->GetChannel<float>(config.intersectionMaskChannel);
 
     // Flatten the image.  We'll use this as the mask to create the stroke.  Don't
-    // actually apply the stroke until we deal with contours, so we don't apply contours
-    // to strokes.
-    shared_ptr<SimpleImage> outlineMask = DeepImageUtil::CollapseEXR(image, strokeMask, { config.objectId });
+    // actually apply the stroke until we deal with intersections, so we don't apply
+    // intersection strokes to other strokes.
+    shared_ptr<SimpleImage> strokeMask = DeepImageUtil::CollapseEXR(image, strokeVisibilityMask, { config.objectId });
 
-    // Create the contour mask.  It's important that we do this before applying the stroke.
-    shared_ptr<SimpleImage> contourMask;
+    // Create the intersection mask.  It's important that we do this before applying the stroke.
+    shared_ptr<SimpleImage> intersectionMask;
     if(config.strokeIntersections)
-	contourMask = CreateIntersectionMask(config, image, intersectionMask);
-    //if(contourMask) contourMask->WriteEXR("test.exr");
+	intersectionMask = CreateIntersectionMask(config, image, intersectionVisibilityMask);
+    //if(intersectionStrokeMask) intersectionStrokeMask->WriteEXR("test.exr");
 
-    // Apply the regular stroke and the contour stroke.
-    ApplyStrokeUsingMask(config, image, outlineMask);
+    // Apply the regular stroke and the intersection stroke.
+    ApplyStrokeUsingMask(config, image, strokeMask);
     if(config.strokeIntersections)
-	ApplyStrokeUsingMask(config, image, contourMask);
+	ApplyStrokeUsingMask(config, image, intersectionMask);
 }
 
 static V4f ParseColor(const string &str)
