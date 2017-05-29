@@ -441,9 +441,6 @@ bool FlattenFiles::flatten(Config config)
     vector<Layer> layers;
     SeparateLayers(config, image, layers);
 
-    for(const auto &layer: layers)
-	printf("Layer: %s, %s\n", layer.layerName.c_str(), layer.layerType.c_str());
-
     // Write the layers.
     for(const auto &layer: layers)
     {
