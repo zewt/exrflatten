@@ -31,7 +31,7 @@ namespace DeepImageStroke
 	Imath::V4f strokeColor = {0,0,0,1};
 
 	bool strokeIntersections = false;
-	float intersectionMinDepth = 1.0f;
+	float intersectionMinDistance = 1.0f;
 	float intersectionFade = 1.0f;
     };
 

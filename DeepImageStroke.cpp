@@ -391,7 +391,7 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 			result *= sampleVisibility1 * sampleVisibility2;
 
 			// When the nearer sample is referenceDistance away from the camera, we look
-			// for differences of depth of intersectionMinDepth.  If the sample is twice as far away,
+			// for differences of depth of intersectionMinDistance.  If the sample is twice as far away,
 			// we require the depth to be twice as much.  This accounts for the fact that objects
 			// which are further away have fewer pixels on screen, so samples further apart
 			// are closer together.  If we don't do this, we'll be too aggressive in detecting
@@ -405,8 +405,8 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 
 			// Scale depth from the depth range to 0-1.
 			result = scale(result,
-			     config.intersectionMinDepth*depthScale,
-			    (config.intersectionMinDepth+config.intersectionFade) * depthScale, 0.0f, 1.0f);
+			     config.intersectionMinDistance*depthScale,
+			    (config.intersectionMinDistance+config.intersectionFade) * depthScale, 0.0f, 1.0f);
 
 			// Clamp to 0-1 now that we're in unit range.  It's important that
 			// we do this before applying sampleVisibility1 below, or else a very
@@ -516,8 +516,8 @@ void DeepImageStroke::Config::ParseOptionsString(string optionsString)
 	    intersectionMaskChannel = args[1];
 	else if(args[0] == "intersections")
 	    strokeIntersections = true;
-	else if(args[0] == "intersection-min-depth")
-	    this->intersectionMinDepth = (float) atof(args[1].c_str());
+	else if(args[0] == "intersection-min-distance")
+	    this->intersectionMinDistance = (float) atof(args[1].c_str());
 	else if(args[0] == "intersection-fade")
 	    this->intersectionFade = (float) atof(args[1].c_str());
     }
