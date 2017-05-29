@@ -2,6 +2,7 @@
 #include <OpenEXR/ImathVec.h>
 #include <OpenEXR/ImathBox.h>
 #include <OpenEXR/ImfDeepScanLineInputFile.h>
+#include <OpenEXR/ImfInputFile.h>
 
 #include <algorithm>
 #include <assert.h>
@@ -215,6 +216,14 @@ void DeepImage::AddSampleCountSliceToFramebuffer(DeepFrameBuffer &frameBuffer)
 
 shared_ptr<DeepImage> DeepImageReader::Open(string filename)
 {
+    // First, read just the header to check that this is a deep EXR.
+    {
+	auto tempFile = make_shared<InputFile>(filename.c_str());
+	int fileVersion = tempFile->version();
+	if((fileVersion & 0x800) == 0)
+	    throw exception("Input file is not a deep EXR.");
+    }
+
     file = make_shared<DeepScanLineInputFile>(filename.c_str());
 
     Box2i dataWindow = file->header().dataWindow();
