@@ -310,15 +310,20 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 	    float maxDistance = 0;
 
 	    static const vector<pair<int,int>> directions = {
-		//{ -1, -1 },
 		{  0, -1 },
-		//{ +1, -1 },
 		{ -1,  0 },
-		//{  0,  0 },
 		{ +1,  0 },
-		//{ -1, +1 },
 		{  0, +1 },
-		//{ +1, +1 },
+
+		// We can test against diagonals, and again other samples in the same
+		// pixel, but this generally doesn't seem to make much difference.
+#if 0
+		{ -1, -1 },
+		{ +1, -1 },
+		{ -1, +1 },
+		{ +1, +1 },
+		{  0,  0 },
+#endif
 	    };
 
 	    const vector<float> &visibilities = SampleVisibilities[y][x];
