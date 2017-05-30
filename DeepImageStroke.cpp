@@ -291,7 +291,6 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
     auto id = image->GetChannel<uint32_t>("id");
     auto Z = image->GetChannel<float>("Z");
     auto P = image->GetChannel<V3f>("P");
-    auto N = image->GetChannel<V3f>("N");
 
     Array2D<vector<float>> SampleVisibilities;
     SampleVisibilities.resizeErase(image->height, image->width);
@@ -347,9 +346,7 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 			continue;
 
 		    float depth1 = Z->Get(x, y, s1);
-
 		    V3f world1 = P->Get(x, y, s1);
-		    // V3f normal1 = N->Get(x, y, s1).normalized();
 
 		    for(int s2 = 0; s2 < image->NumSamples(x2,y2); ++s2)
 		    {
@@ -364,13 +361,10 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 			// Don't clear this pixel if it's further away than the source, so we clear
 			// pixels within the nearer object and not the farther one.
 			float depth2 = Z->Get(x2, y2, s2);
-			if(depth2 < depth1) // XXX
+			if(depth2 < depth1)
 			    continue;
 
 			V3f world2 = P->Get(x2, y2, s2);
-
-			// V3f normal2 = N->Get(x2, y2, s2).normalized();
-			// float angle = acosf(normal1.dot(normal2)) * 180 / M_PI;
 
 			// Find the world space distance between these two samples.
 			float distance = (world2 - world1).length();
@@ -382,9 +376,6 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 				x, y, s1, x2, y2, s2, distance,
 				sampleVisibility1, sampleVisibility2);
 			} */
-
-//			float result = angle;
-			float result = distance;
 
 			// When the nearer sample is referenceDistance away from the camera, we look
 			// for differences of depth of intersectionMinDistance.  If the sample is twice as far away,
@@ -400,7 +391,7 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 			depthScale = max(depthScale, 1/4.0f);
 
 			// Scale depth from the depth range to 0-1.
-			result = scale(result,
+			float result = scale(distance,
 			     config.intersectionMinDistance*depthScale,
 			    (config.intersectionMinDistance+config.intersectionFade) * depthScale, 0.0f, 1.0f);
 
