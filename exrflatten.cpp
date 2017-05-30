@@ -78,10 +78,25 @@ struct Config
 {
     bool ParseOption(string opt, string value);
     void Run() const;
+    shared_ptr<EXROperation> CreateOperation(string opt, string value);
 
     SharedConfig sharedConfig;
     vector<shared_ptr<EXROperation>> operations;
 };
+
+shared_ptr<EXROperation> Config::CreateOperation(string opt, string value)
+{
+    if(opt == "save-layers")
+	return make_shared<EXROperation_WriteLayers>(sharedConfig, value);
+    else if(opt == "create-mask")
+	return make_shared<EXROperation_CreateMask>(sharedConfig, value);
+    else if(opt == "stroke")
+	return make_shared<EXROperation_Stroke>(sharedConfig, value);
+    else if(opt == "save-flattened")
+	return make_shared<EXROperation_SaveFlattenedImage>(sharedConfig, value);
+    else
+	return nullptr;
+}
 
 bool Config::ParseOption(string opt, string value)
 {
@@ -95,24 +110,11 @@ bool Config::ParseOption(string opt, string value)
 	sharedConfig.outputPath = value;
 	return true;
     }
-    else if(opt == "save-layers")
+
+    auto op = CreateOperation(opt, value);
+    if(op != nullptr)
     {
-	operations.push_back(make_shared<EXROperation_WriteLayers>(sharedConfig, value));
-	return true;
-    }
-    else if(opt == "create-mask")
-    {
-	operations.push_back(make_shared<EXROperation_CreateMask>(sharedConfig, value));
-	return true;
-    }
-    else if(opt == "stroke")
-    {
-	operations.push_back(make_shared<EXROperation_Stroke>(sharedConfig, value));
-	return true;
-    }
-    else if(opt == "save-flattened")
-    {
-	operations.push_back(make_shared<EXROperation_SaveFlattenedImage>(sharedConfig, value));
+	operations.push_back(CreateOperation(opt, value));
 	return true;
     }
 
@@ -121,7 +123,7 @@ bool Config::ParseOption(string opt, string value)
 
     // We don't know what this option is.  See if it's an option for the most
     // recent operation.
-    shared_ptr<EXROperation> op = operations.back();
+    op = operations.back();
     return op->AddArgument(opt, value);
 }
 
