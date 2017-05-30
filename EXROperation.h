@@ -17,6 +17,14 @@ struct SharedConfig
 {
     string outputPath;
     vector<string> inputFilenames;
+
+    // Given a filename, return the path to save it.
+    string GetFilename(string filename) const
+    {
+	if(!outputPath.empty())
+	    filename = outputPath + "/" + filename;
+	return filename;
+    }
 };
 
 class EXROperation

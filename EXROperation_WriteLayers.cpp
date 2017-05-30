@@ -182,8 +182,6 @@ void EXROperation_WriteLayers::Run(shared_ptr<DeepImage> image) const
 string EXROperation_WriteLayers::MakeOutputFilename(const Layer &layer) const
 {
     string outputName = outputPattern;
-    if(!sharedConfig.outputPath.empty())
-	outputName = sharedConfig.outputPath + "/" + outputName;
 
     const string originalOutputName = outputName;
 
@@ -224,6 +222,8 @@ string EXROperation_WriteLayers::MakeOutputFilename(const Layer &layer) const
         fprintf(stderr, "Try \"%s\" instead.\n", (outputName + "_<name>.exr").c_str());
         warned = true;
     }
+
+    outputName = sharedConfig.GetFilename(outputName);
 
     return outputName;
 }
