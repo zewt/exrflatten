@@ -97,17 +97,17 @@ bool Config::ParseOption(string opt, string value)
     }
     else if(opt == "save-layers")
     {
-	operations.push_back(make_shared<EXROperation_WriteLayers>(sharedConfig));
+	operations.push_back(make_shared<EXROperation_WriteLayers>(sharedConfig, value));
 	return true;
     }
     else if(opt == "create-mask")
     {
-	operations.push_back(make_shared<EXROperation_CreateMask>(value));
+	operations.push_back(make_shared<EXROperation_CreateMask>(sharedConfig, value));
 	return true;
     }
     else if(opt == "stroke")
     {
-	operations.push_back(make_shared<EXROperation_Stroke>(value));
+	operations.push_back(make_shared<EXROperation_Stroke>(sharedConfig, value));
 	return true;
     }
     else if(opt == "save-flattened")

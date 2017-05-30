@@ -54,7 +54,7 @@ namespace DeepImageStroke
 class EXROperation_Stroke: public EXROperation
 {
 public:
-    EXROperation_Stroke(string args);
+    EXROperation_Stroke(const SharedConfig &sharedConfig, string args);
     bool AddArgument(string opt, string value);
     void Run(shared_ptr<DeepImage> image) const;
     void AddChannels(shared_ptr<DeepImage> image, Imf::DeepFrameBuffer &frameBuffer) const;

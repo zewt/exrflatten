@@ -506,7 +506,7 @@ bool EXROperation_Stroke::AddArgument(string opt, string value)
 }
 
 // --stroke=1000
-EXROperation_Stroke::EXROperation_Stroke(string args)
+EXROperation_Stroke::EXROperation_Stroke(const SharedConfig &sharedConfig_, string args)
 {
     strokeDesc.objectId = atoi(args.c_str());
 }

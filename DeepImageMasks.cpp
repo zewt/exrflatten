@@ -184,7 +184,7 @@ shared_ptr<TypedDeepImageChannel<float>> CreateMask::CreateDistance(shared_ptr<D
     return outputMask;
 }
 
-EXROperation_CreateMask::EXROperation_CreateMask(string args)
+EXROperation_CreateMask::EXROperation_CreateMask(const SharedConfig &sharedConfig, string args)
 {
     if(args == "facing")
 	createMask.mode = CreateMask::CreateMaskMode_FacingAngle;

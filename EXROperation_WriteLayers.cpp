@@ -5,7 +5,7 @@
 using namespace Imf;
 using namespace Imath;
 
-EXROperation_WriteLayers::EXROperation_WriteLayers(const SharedConfig &sharedConfig_):
+EXROperation_WriteLayers::EXROperation_WriteLayers(const SharedConfig &sharedConfig_, string args):
     sharedConfig(sharedConfig_)
 {
 }
