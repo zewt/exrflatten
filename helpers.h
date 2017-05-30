@@ -69,4 +69,17 @@ T scale_clamp(T value, T l1, T h1, T l2, T h2)
     return ::clamp(scale(value, l1, h1, l2, h2), l2, h2);
 }
 
+class StringException: public exception
+{
+public:
+    StringException(string s)
+    {
+	value = s;
+    }
+
+    const char *what() const { return value.c_str(); }
+private:
+    string value;
+};
+
 #endif

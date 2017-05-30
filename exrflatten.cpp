@@ -205,19 +205,19 @@ vector<pair<string,string>> GetArgs(int argc, char **argv)
 
 int main(int argc, char **argv)
 {
-    Config config;
-    for(auto opt: GetArgs(argc, argv))
-    {
-	if(!config.ParseOption(opt.first, opt.second))
-	    printf("Unrecognized argument: %s\n", opt.first.c_str());
-    }
-
-    if(config.sharedConfig.inputFilenames.empty()) {
-	fprintf(stderr, "No input files were specified.\n");
-	return 1;
-    }
-
     try {
+	Config config;
+	for(auto opt: GetArgs(argc, argv))
+	{
+	    if(!config.ParseOption(opt.first, opt.second))
+		printf("Unrecognized argument: %s\n", opt.first.c_str());
+	}
+
+	if(config.sharedConfig.inputFilenames.empty())
+	    throw StringException("No input files were specified.");
+	if(config.operations.empty())
+	    throw StringException("No operations were specified.");
+
 	config.Run();
     }
     catch(const exception &e)
