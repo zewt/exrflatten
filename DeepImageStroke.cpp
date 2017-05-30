@@ -371,10 +371,11 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 
 			/* if(x == TEST_X && y == TEST_Y)
 			{
-			    printf("distance (%+ix%+i) between %ix%i sample %i and %ix%i sample %i: %f (vis %f, %f)\n",
+			    printf("distance (%+ix%+i) between %ix%i sample %i (depth %.1f, vis %.2f) and %ix%i sample %i (vis %.2f): depth %.1f, distance %f\n",
 				dir.first, dir.second,
-				x, y, s1, x2, y2, s2, distance,
-				sampleVisibility1, sampleVisibility2);
+				x, y, s1, depth1, sampleVisibility1,
+				x2, y2, s2, sampleVisibility2,
+				depth2-depth1, distance);
 			} */
 
 			// When the nearer sample is referenceDistance away from the camera, we look
