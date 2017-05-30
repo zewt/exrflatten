@@ -237,6 +237,13 @@ bool EXROperation_CreateMask::AddArgument(string opt, string value)
     return true;
 }
 
+void EXROperation_CreateMask::ArgumentsComplete()
+{
+    // Check that we received all of our required arguments.
+    if(createMask.outputChannelName.empty())
+	throw StringException("--create-mask: no --name was specified");
+}
+
 void EXROperation_CreateMask::Run(shared_ptr<DeepImage> image) const
 {
     createMask.Create(image);
