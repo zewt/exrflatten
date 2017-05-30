@@ -32,6 +32,9 @@ class EXROperation
 public:
     virtual bool AddArgument(string opt, string value) { return false; }
 
+    // The last commandline argument for this operation has been received.
+    virtual void ArgumentsComplete() { }
+
     // Add all EXR channels needed by this operation.
     virtual void AddChannels(shared_ptr<DeepImage> image, Imf::DeepFrameBuffer &frameBuffer) const { };
 

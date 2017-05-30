@@ -76,6 +76,7 @@ private:
 
 struct Config
 {
+    void ParseOptions(const vector<pair<string,string>> &options);
     bool ParseOption(string opt, string value);
     void Run() const;
     shared_ptr<EXROperation> CreateOperation(string opt, string value);
@@ -83,6 +84,18 @@ struct Config
     SharedConfig sharedConfig;
     vector<shared_ptr<EXROperation>> operations;
 };
+
+void Config::ParseOptions(const vector<pair<string,string>> &options)
+{
+    for(auto opt: options)
+    {
+	if(!ParseOption(opt.first, opt.second))
+	    printf("Unrecognized argument: %s\n", opt.first.c_str());
+    }
+
+    if(!operations.empty())
+	operations.back()->ArgumentsComplete();
+}
 
 shared_ptr<EXROperation> Config::CreateOperation(string opt, string value)
 {
@@ -114,6 +127,10 @@ bool Config::ParseOption(string opt, string value)
     auto op = CreateOperation(opt, value);
     if(op != nullptr)
     {
+	// If there was a previous operation, tell it that it's received all of its arguments.
+	if(!operations.empty())
+	    operations.back()->ArgumentsComplete();
+
 	operations.push_back(CreateOperation(opt, value));
 	return true;
     }
@@ -207,11 +224,7 @@ int main(int argc, char **argv)
 {
     try {
 	Config config;
-	for(auto opt: GetArgs(argc, argv))
-	{
-	    if(!config.ParseOption(opt.first, opt.second))
-		printf("Unrecognized argument: %s\n", opt.first.c_str());
-	}
+	config.ParseOptions(GetArgs(argc, argv));
 
 	if(config.sharedConfig.inputFilenames.empty())
 	    throw StringException("No input files were specified.");
