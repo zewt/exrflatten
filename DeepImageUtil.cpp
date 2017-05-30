@@ -23,6 +23,31 @@ vector<string> DeepImageUtil::GetChannelsInLayer(const Header &header, string la
 	result.push_back(start.name());
 	++start;
     }
+
+    // OpenEXR layers have a really silly design flaw: they don't specify the order!  We
+    // just get them alphabetized.   If you look up a normals channel with N.X, N.Y, N.Z
+    // you'll get the right channel order, but if you look up a diffuse channel with
+    // C.R, C.G, C.B, you'll get B, G, R.  This means you can't load a vector from a layer
+    // name--you have to already know the channel names to set their order, which is
+    // incredibly silly.
+    //
+    // Work around this by having a list of channels and their canonical order, and sorting
+    // channels in that order.  This could be optimized to avoid searching channelOrder, but
+    // it's not useful since we're sorting arrays of 3 or 4 elements.
+    static const vector<string> channelOrder = {
+	"R", "G", "B", "Y", "RY", "BY",
+	"A", "AR", "AG", "AB",
+	"X", "Y", "Z"
+    };
+    sort(result.begin(), result.end(), [&layerName](string lhs, string rhs) {
+	lhs = lhs.substr(layerName.size()+1); // diffuse.G -> G
+	rhs = rhs.substr(layerName.size()+1);
+	auto lhsIt = find(channelOrder.begin(), channelOrder.end(), lhs);
+	auto rhsIt = find(channelOrder.begin(), channelOrder.end(), rhs);
+	size_t lhsOrder = distance(channelOrder.begin(), lhsIt);
+	size_t rhsOrder = distance(channelOrder.begin(), rhsIt);
+	return lhsOrder < rhsOrder;
+    });
     return result;
 }
 
