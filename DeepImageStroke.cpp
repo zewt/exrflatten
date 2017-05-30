@@ -521,10 +521,13 @@ void EXROperation_Stroke::Run(shared_ptr<DeepImage> image) const
 
 void EXROperation_Stroke::AddChannels(shared_ptr<DeepImage> image, DeepFrameBuffer &frameBuffer) const
 {
+    image->AddChannelToFramebuffer<V3f>("P", frameBuffer, false);
+    image->AddChannelToFramebuffer<V3f>("N", frameBuffer, false);
+
     if(!strokeDesc.strokeMaskChannel.empty())
-	image->AddChannelToFramebuffer<float>(strokeDesc.strokeMaskChannel, { strokeDesc.strokeMaskChannel }, frameBuffer, true);
+	image->AddChannelToFramebuffer<float>(strokeDesc.strokeMaskChannel, frameBuffer, true);
     if(!strokeDesc.intersectionMaskChannel.empty())
-	image->AddChannelToFramebuffer<float>(strokeDesc.intersectionMaskChannel, { strokeDesc.intersectionMaskChannel }, frameBuffer, true);
+	image->AddChannelToFramebuffer<float>(strokeDesc.intersectionMaskChannel, frameBuffer, true);
 }
 
 /*

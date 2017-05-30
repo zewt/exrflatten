@@ -155,15 +155,24 @@ void Config::Run() const
 	// Set up the channels we're interested in.
 	DeepFrameBuffer frameBuffer;
 	image->AddSampleCountSliceToFramebuffer(frameBuffer);
-	image->AddChannelToFramebuffer<V4f>("rgba", {"R", "G", "B", "A"}, frameBuffer, false);
-	image->AddChannelToFramebuffer<uint32_t>("id", {"id"}, frameBuffer, false);
-	image->AddChannelToFramebuffer<float>("Z", { "Z" }, frameBuffer, false);
-	image->AddChannelToFramebuffer<float>("ZBack", {"ZBack"}, frameBuffer, false);
-	image->AddChannelToFramebuffer<V3f>("P", { "P.X", "P.Y", "P.Z" }, frameBuffer, true);
-	image->AddChannelToFramebuffer<V3f>("N", { "N.X", "N.Y", "N.Z" }, frameBuffer, true);
+	image->AddChannelToFramebuffer<V4f>("rgba", frameBuffer, false);
+	image->AddChannelToFramebuffer<uint32_t>("id", frameBuffer, false);
+	image->AddChannelToFramebuffer<float>("Z", frameBuffer, false);
+	image->AddChannelToFramebuffer<float>("ZBack", frameBuffer, false);
 
 	for(auto op: operations)
 	    op->AddChannels(image, frameBuffer);
+
+	// If any channel/layer was required above that isn't in the image, warn about it.
+	string missing = "";
+	for(auto channel: image->missingChannels)
+	{
+	    if(!missing.empty())
+		missing += ", ";
+	    missing += channel;
+	}
+	if(!missing.empty())
+	    printf("Warning: required input channels are missing: %s\n", missing.c_str());
 
 	reader.Read(frameBuffer);
 	images.push_back(image);

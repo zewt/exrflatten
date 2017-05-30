@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <set>
 
 #include <OpenEXR/ImfDeepFrameBuffer.h>
 #include <OpenEXR/ImfArray.h>
@@ -129,12 +130,10 @@ public:
 
     // Add a channel, and add it to the DeepFrameBuffer to be read.
     //
-    // channelName is the name to assign this channel.  This usually corresponds with an EXR channel
-    // or layer name, but this isn't required.
-    //
-    // For vector types, exrChannels is a list of the EXR channels for each component, eg. { "P.X", "P.Y", "P.Z" }.
+    // channelName is the name of the EXR channel or layer.  As a special case, the channelName
+    // "rgba" reads the non-layered R, G, B and A channels as a V4f channel.
     template<typename T>
-    shared_ptr<TypedDeepImageChannel<T>> AddChannelToFramebuffer(string channelName, vector<string> exrChannels, Imf::DeepFrameBuffer &frameBuffer, bool needsAlphaDivide);
+    shared_ptr<TypedDeepImageChannel<T>> AddChannelToFramebuffer(string channelName, Imf::DeepFrameBuffer &frameBuffer, bool needsAlphaDivide);
 
     // Set sampleCount as the sample count slice in the given framebuffer.
     void AddSampleCountSliceToFramebuffer(Imf::DeepFrameBuffer &frameBuffer);
@@ -163,10 +162,14 @@ public:
     Imf::Header header;
     map<string, shared_ptr<DeepImageChannel>> channels;
     Imf::Array2D<unsigned int> sampleCount;
+
+    // Channels that were requested with AddChannelToFramebuffer, but that
+    // aren't in the file.
+    set<string> missingChannels;
 };
 
 template<typename T>
-shared_ptr<TypedDeepImageChannel<T>> DeepImage::AddChannelToFramebuffer(string channelName, vector<string> exrChannels, Imf::DeepFrameBuffer &frameBuffer, bool needsAlphaDivide_)
+shared_ptr<TypedDeepImageChannel<T>> DeepImage::AddChannelToFramebuffer(string channelName, Imf::DeepFrameBuffer &frameBuffer, bool needsAlphaDivide_)
 {
     if(channels.find(channelName) != channels.end())
     {
@@ -177,11 +180,20 @@ shared_ptr<TypedDeepImageChannel<T>> DeepImage::AddChannelToFramebuffer(string c
 	return result;
     }
 
+    vector<string> channelsInLayer = DeepImageUtil::GetChannelsInLayer(header, channelName);
+    if(channelName == "rgba")
+	channelsInLayer = { "R", "G", "B", "A" };
+    if(channelsInLayer.empty())
+    {
+	missingChannels.insert(channelName);
+	return nullptr;
+    }
+
     shared_ptr<TypedDeepImageChannel<T>> channel = AddChannel<T>(channelName);
     channel->needsAlphaDivide = needsAlphaDivide_;
 
     int idx = 0;
-    for(string exrChannel: exrChannels)
+    for(string exrChannel: channelsInLayer)
 	channel->AddToFramebuffer(exrChannel, header, frameBuffer, idx++);
     return channel;
 }
