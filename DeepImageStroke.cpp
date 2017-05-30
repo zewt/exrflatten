@@ -385,10 +385,6 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 
 //			float result = angle;
 			float result = distance;
-			// Scale by the visibility of both samples.  This way, the total scale of all
-			// sample comparisons when we add them up will be even, no matter how many samples
-			// we have.
-			result *= sampleVisibility1 * sampleVisibility2;
 
 			// When the nearer sample is referenceDistance away from the camera, we look
 			// for differences of depth of intersectionMinDistance.  If the sample is twice as far away,
@@ -414,11 +410,8 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 			// to clamp to 1 then apply coverage.
 			result = min(max(result, 0.0f), 1.0f);
 
-			// Scale by the visibility of the pixel we're testing.  (This doubles the
-			// sampleVisibility1 scale since we applied it above for a different reason.)
-			// This is where we apply coverage: more transparent pixels should be more
-			// transparent in the mask.
-			result *= sampleVisibility1;
+			// Scale by the visibility of the pixels we're testing.
+			result *= sampleVisibility1 * sampleVisibility2;
 
 			// If we have a mask, apply it now like visibility.
 			if(imageMask)
