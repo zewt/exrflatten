@@ -45,10 +45,10 @@ using namespace Iex;
 class EXROperation_SaveFlattenedImage: public EXROperation
 {
 public:
-    EXROperation_SaveFlattenedImage(const SharedConfig &sharedConfig_, string args):
+    EXROperation_SaveFlattenedImage(const SharedConfig &sharedConfig_, string opt, vector<pair<string,string>> args):
 	sharedConfig(sharedConfig_)
     {
-	filename = args;
+	filename = opt;
     }
 
     void Run(shared_ptr<DeepImage> image) const
@@ -77,71 +77,99 @@ private:
 struct Config
 {
     void ParseOptions(const vector<pair<string,string>> &options);
-    bool ParseOption(string opt, string value);
     void Run() const;
-    shared_ptr<EXROperation> CreateOperation(string opt, string value);
+    typedef function<shared_ptr<EXROperation>(const SharedConfig &sharedConfig, string opt, vector<pair<string,string>> arguments)> CreateFunc;
 
     SharedConfig sharedConfig;
     vector<shared_ptr<EXROperation>> operations;
 };
 
+template<typename T>
+shared_ptr<T> CreateOp(const SharedConfig &sharedConfig, string opt, vector<pair<string,string>> arguments)
+{
+    return make_shared<T>(sharedConfig, opt, arguments);
+}
+
+static map<string, Config::CreateFunc> Operations = {
+    { "save-layers", CreateOp<EXROperation_WriteLayers> },
+    { "create-mask", CreateOp<EXROperation_CreateMask> },
+    { "stroke", CreateOp<EXROperation_Stroke> },
+    { "save-flattened", CreateOp<EXROperation_SaveFlattenedImage> },
+};
+
 void Config::ParseOptions(const vector<pair<string,string>> &options)
 {
-    for(auto opt: options)
+    string currentOp;
+    vector<pair<string,string>> accumulatedOptions;
+
+    auto finalizeOp = [&] {
+	if(currentOp.empty())
+	    return;
+
+	string firstOption = accumulatedOptions[0].second;
+	vector<pair<string,string>> options(accumulatedOptions.begin()+1, accumulatedOptions.end());
+	auto op = Operations.at(currentOp)(sharedConfig, firstOption, options);
+	operations.push_back(op);
+
+	accumulatedOptions.clear();
+	currentOp.clear();
+    };
+
+    for(auto it: options)
     {
-	if(!ParseOption(opt.first, opt.second))
-	    printf("Unrecognized argument: %s\n", opt.first.c_str());
+	string opt = it.first;
+	string value = it.second;
+
+	// See if this is a global option.
+	if(sharedConfig.ParseOption(opt, value))
+	{
+	    // There are too many confusing situations if global operations can come in between
+	    // operations, so require that they come first.
+	    //
+	    // For example, if we allow specifying --output we can allow a different output directory
+	    // for each operation, but if you say
+	    // --output=output --save-layers --output=output2 --save-layers
+	    //
+	    // it's unclear whether the second --output is meant to affect the first --save-layers or
+	    // not, since normally options for an operation come after the operation, but global options
+	    // typically come before it.  This isn't useful enough for the complication.
+	    if(!currentOp.empty() || !operations.empty())
+		throw StringException("Global options must precede operations: --" + opt);
+	    continue;
+	}
+
+	// See if this is an option to create a new operation, eg. --stroke.
+	if(Operations.find(opt) != Operations.end())
+	{
+	    // This is a new operation.  Finish the previous one, creating it and passing it
+	    // any options we saw since the operation command.
+	    finalizeOp();
+
+	    // Save the function to create the operation.  We'll create it after we've collected
+	    // its arguments.
+	    currentOp = opt;
+
+	    // Save the operation argument itself.  The option will be the argument when creating
+	    // the operation, eg. the 1 in --stroke=1.
+	    accumulatedOptions.emplace_back(opt, value);
+	    continue;
+	}
+
+	// We don't know what this option is.  Add it to accumulatedOptions, so we send it
+	// with the current operation's arguments.  
+	if(currentOp.empty())
+	    printf("Unrecognized argument: %s\n", opt.c_str());
+	else
+	    accumulatedOptions.emplace_back(opt, value);
     }
 
-    if(!operations.empty())
-	operations.back()->ArgumentsComplete();
-}
+    // Finish creating the last op.
+    finalizeOp();
 
-shared_ptr<EXROperation> Config::CreateOperation(string opt, string value)
-{
-    if(opt == "save-layers")
-	return make_shared<EXROperation_WriteLayers>(sharedConfig, value);
-    else if(opt == "create-mask")
-	return make_shared<EXROperation_CreateMask>(sharedConfig, value);
-    else if(opt == "stroke")
-	return make_shared<EXROperation_Stroke>(sharedConfig, value);
-    else if(opt == "save-flattened")
-	return make_shared<EXROperation_SaveFlattenedImage>(sharedConfig, value);
-    else
-	return nullptr;
-}
-
-bool Config::ParseOption(string opt, string value)
-{
-    if(opt == "input")
-    {
-	sharedConfig.inputFilenames.push_back(value);
-	return true;
-    }
-    else if(opt == "output")
-    {
-	sharedConfig.outputPath = value;
-	return true;
-    }
-
-    auto op = CreateOperation(opt, value);
-    if(op != nullptr)
-    {
-	// If there was a previous operation, tell it that it's received all of its arguments.
-	if(!operations.empty())
-	    operations.back()->ArgumentsComplete();
-
-	operations.push_back(CreateOperation(opt, value));
-	return true;
-    }
-
+    if(sharedConfig.inputFilenames.empty())
+	throw StringException("No input files were specified.");
     if(operations.empty())
-	return false;
-
-    // We don't know what this option is.  See if it's an option for the most
-    // recent operation.
-    op = operations.back();
-    return op->AddArgument(opt, value);
+	throw StringException("No operations were specified.");
 }
 
 void Config::Run() const
@@ -234,11 +262,6 @@ int main(int argc, char **argv)
     try {
 	Config config;
 	config.ParseOptions(GetArgs(argc, argv));
-
-	if(config.sharedConfig.inputFilenames.empty())
-	    throw StringException("No input files were specified.");
-	if(config.operations.empty())
-	    throw StringException("No operations were specified.");
 
 	config.Run();
     }

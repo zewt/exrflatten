@@ -12,9 +12,8 @@ using namespace std;
 class EXROperation_WriteLayers: public EXROperation
 {
 public:
-    EXROperation_WriteLayers(const SharedConfig &sharedConfig, string args);
+    EXROperation_WriteLayers(const SharedConfig &sharedConfig, string opt, vector<pair<string,string>> arguments);
 
-    bool AddArgument(string opt, string value);
     void AddChannels(shared_ptr<DeepImage> image, Imf::DeepFrameBuffer &frameBuffer) const;
     void Run(shared_ptr<DeepImage> image) const;
 

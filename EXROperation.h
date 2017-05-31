@@ -7,6 +7,7 @@
 using namespace std;
 
 class DeepImage;
+#include "helpers.h"
 
 #include <OpenEXR/ImfDeepFrameBuffer.h>
 
@@ -17,6 +18,22 @@ struct SharedConfig
 {
     string outputPath;
     vector<string> inputFilenames;
+
+    bool ParseOption(string opt, string value)
+    {
+	if(opt == "input")
+	{
+	    inputFilenames.push_back(value);
+	    return true;
+	}
+	else if(opt == "output")
+	{
+	    outputPath = value;
+	    return true;
+	}
+
+	return false;
+    }
 
     // Given a filename, return the path to save it.
     string GetFilename(string filename) const
@@ -30,11 +47,6 @@ struct SharedConfig
 class EXROperation
 {
 public:
-    virtual bool AddArgument(string opt, string value) { return false; }
-
-    // The last commandline argument for this operation has been received.
-    virtual void ArgumentsComplete() { }
-
     // Add all EXR channels needed by this operation.
     virtual void AddChannels(shared_ptr<DeepImage> image, Imf::DeepFrameBuffer &frameBuffer) const { };
 

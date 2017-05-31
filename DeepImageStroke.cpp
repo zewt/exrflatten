@@ -434,7 +434,15 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
     return mask;
 }
 
-void DeepImageStroke::AddStroke(const DeepImageStroke::Config &config, shared_ptr<DeepImage> image)
+void EXROperation_Stroke::Run(shared_ptr<DeepImage> image) const
+{
+    AddStroke(strokeDesc, image);
+
+    // Re-sort samples, since new samples may have been added.
+    DeepImageUtil::SortSamplesByDepth(image);
+}
+
+void EXROperation_Stroke::AddStroke(const DeepImageStroke::Config &config, shared_ptr<DeepImage> image) const
 {
     // The user masks that control where we apply strokes and intersection lines:
     shared_ptr<TypedDeepImageChannel<float>> strokeVisibilityMask;
@@ -479,44 +487,37 @@ static V4f ParseColor(const string &str)
     return rgba;
 }
 
-bool EXROperation_Stroke::AddArgument(string opt, string value)
-{
-    if(opt == "output-id")
-	strokeDesc.outputObjectId = atoi(value.c_str());
-    else if(opt == "radius")
-	strokeDesc.radius = (float) atof(value.c_str());
-    else if(opt == "fade")
-	strokeDesc.fade = (float) atof(value.c_str());
-    else if(opt == "color")
-	strokeDesc.strokeColor = ParseColor(value);
-    else if(opt == "stroke-mask")
-	strokeDesc.strokeMaskChannel = value;
-    else if(opt == "intersection-mask")
-	strokeDesc.intersectionMaskChannel = value;
-    else if(opt == "intersections")
-	strokeDesc.strokeIntersections = true;
-    else if(opt == "intersection-min-distance")
-	strokeDesc.intersectionMinDistance = (float) atof(value.c_str());
-    else if(opt == "intersection-fade")
-	strokeDesc.intersectionFade = (float) atof(value.c_str());
-    else
-	return false;
-
-    return true;
-}
-
 // --stroke=1000
-EXROperation_Stroke::EXROperation_Stroke(const SharedConfig &sharedConfig_, string args)
+EXROperation_Stroke::EXROperation_Stroke(const SharedConfig &sharedConfig_, string opt, vector<pair<string,string>> arguments):
+    sharedConfig(sharedConfig_)
 {
-    strokeDesc.objectId = atoi(args.c_str());
-}
+    strokeDesc.objectId = atoi(opt.c_str());
 
-void EXROperation_Stroke::Run(shared_ptr<DeepImage> image) const
-{
-    DeepImageStroke::AddStroke(strokeDesc, image);
-
-    // Re-sort samples, since new samples may have been added.
-    DeepImageUtil::SortSamplesByDepth(image);
+    for(auto it: arguments)
+    {
+	string arg = it.first;
+	string value = it.second;
+	if(arg == "output-id")
+	    strokeDesc.outputObjectId = atoi(value.c_str());
+	else if(arg == "radius")
+	    strokeDesc.radius = (float) atof(value.c_str());
+	else if(arg == "fade")
+	    strokeDesc.fade = (float) atof(value.c_str());
+	else if(arg == "color")
+	    strokeDesc.strokeColor = ParseColor(value);
+	else if(arg == "stroke-mask")
+	    strokeDesc.strokeMaskChannel = value;
+	else if(arg == "intersection-mask")
+	    strokeDesc.intersectionMaskChannel = value;
+	else if(arg == "intersections")
+	    strokeDesc.strokeIntersections = true;
+	else if(arg == "intersection-min-distance")
+	    strokeDesc.intersectionMinDistance = (float) atof(value.c_str());
+	else if(arg == "intersection-fade")
+	    strokeDesc.intersectionFade = (float) atof(value.c_str());
+	else
+	    throw StringException("Unknown stroke option: " + arg);
+    }
 }
 
 void EXROperation_Stroke::AddChannels(shared_ptr<DeepImage> image, DeepFrameBuffer &frameBuffer) const

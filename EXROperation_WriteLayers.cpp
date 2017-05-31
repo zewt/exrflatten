@@ -5,58 +5,56 @@
 using namespace Imf;
 using namespace Imath;
 
-EXROperation_WriteLayers::EXROperation_WriteLayers(const SharedConfig &sharedConfig_, string args):
+EXROperation_WriteLayers::EXROperation_WriteLayers(const SharedConfig &sharedConfig_, string opt, vector<pair<string,string>> arguments):
     sharedConfig(sharedConfig_)
 {
-}
+    for(auto it: arguments)
+    {
+	string arg = it.first;
+	string value = it.second;
 
-bool EXROperation_WriteLayers::AddArgument(string opt, string value)
-{
-    if(opt == "filename-pattern")
-    {
-	outputPattern = value;
-	return true;
-    }
-    else if(opt == "layer")
-    {
-	// id=name
-	vector<string> descParts;
-	split(value, "=", descParts);
-	if(descParts.size() != 2)
+	if(arg == "filename-pattern")
 	{
-	    printf("Warning: ignored part of layer desc \"%s\"\n", value.c_str());
-	    return true;
+	    outputPattern = value;
 	}
-
-	LayerDesc layer;
-	layer.objectId = atoi(descParts[0].c_str());
-	layer.layerName = descParts[1];
-	layerDescs.push_back(layer);
-	return true;
-    }
-    else if(opt == "layer-mask")
-    {
-	MaskDesc mask;
-	mask.ParseOptionsString(value);
-	masks.push_back(mask);
-	return true;
-    }
-    else if(opt == "combine")
-    {
-	const char *split = strchr(value.c_str(), ',');
-	if(split == NULL)
+	else if(arg == "layer")
 	{
-	    printf("Invalid --combine (ignored)\n");
-	    return true;
+	    // id=name
+	    vector<string> descParts;
+	    split(value, "=", descParts);
+	    if(descParts.size() != 2)
+	    {
+		printf("Warning: ignored part of layer desc \"%s\"\n", value.c_str());
+		continue;
+	    }
+
+	    LayerDesc layer;
+	    layer.objectId = atoi(descParts[0].c_str());
+	    layer.layerName = descParts[1];
+	    layerDescs.push_back(layer);
 	}
+	else if(arg == "layer-mask")
+	{
+	    MaskDesc mask;
+	    mask.ParseOptionsString(value);
+	    masks.push_back(mask);
+	}
+	else if(arg == "combine")
+	{
+	    const char *split = strchr(value.c_str(), ',');
+	    if(split == NULL)
+	    {
+		printf("Invalid --combine (ignored)\n");
+		continue;
+	    }
 
-	int dst = atoi(value.c_str());
-	int src = atoi(split+1);
-	combines.push_back(make_pair(dst, src));
-	return true;
+	    int dst = atoi(value.c_str());
+	    int src = atoi(split+1);
+	    combines.push_back(make_pair(dst, src));
+	}
+	else
+	    throw StringException("Unknown save-layers option: " + arg);
     }
-
-    return false;
 }
 
 void EXROperation_WriteLayers::AddChannels(shared_ptr<DeepImage> image, DeepFrameBuffer &frameBuffer) const

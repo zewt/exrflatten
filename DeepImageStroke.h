@@ -43,7 +43,6 @@ namespace DeepImageStroke
     // the shape and the radius of the stroke.
     float DistanceAndRadiusToAlpha(float distance, const Config &config);
 
-    void AddStroke(const Config &config, shared_ptr<DeepImage> image);
     shared_ptr<SimpleImage> CreateIntersectionMask(const DeepImageStroke::Config &config,
 	shared_ptr<const DeepImage> image, shared_ptr<const TypedDeepImageChannel<float>> imageMask);
     void ApplyStrokeUsingMask(const DeepImageStroke::Config &config, shared_ptr<DeepImage> image, shared_ptr<SimpleImage> mask);
@@ -54,12 +53,14 @@ namespace DeepImageStroke
 class EXROperation_Stroke: public EXROperation
 {
 public:
-    EXROperation_Stroke(const SharedConfig &sharedConfig, string args);
-    bool AddArgument(string opt, string value);
+    EXROperation_Stroke(const SharedConfig &sharedConfig, string opt, vector<pair<string,string>> args);
     void Run(shared_ptr<DeepImage> image) const;
     void AddChannels(shared_ptr<DeepImage> image, Imf::DeepFrameBuffer &frameBuffer) const;
 
 private:
+    void AddStroke(const DeepImageStroke::Config &config, shared_ptr<DeepImage> image) const;
+
+    const SharedConfig &sharedConfig;
     DeepImageStroke::Config strokeDesc;
 };
 
