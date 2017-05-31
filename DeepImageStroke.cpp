@@ -466,7 +466,7 @@ void EXROperation_Stroke::AddStroke(const DeepImageStroke::Config &config, share
 
 	// This is just for diagnostics.
 	if(!config.saveIntersectionMask.empty())
-	    intersectionMask->WriteEXR(sharedConfig.GetFilename(config.saveIntersectionMask));
+	    intersectionMask->WriteEXR(config.saveIntersectionMask);
     }
 
     // Apply the regular stroke and the intersection stroke.
