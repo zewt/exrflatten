@@ -276,12 +276,73 @@ void DeepImageStroke::ApplyStrokeUsingMask(const DeepImageStroke::Config &config
     });
 }
 
+// Return the number of pixels crossed when moving one pixel to the right, at a
+// depth of 1.
+static float CalculateDepthScale(const DeepImageStroke::Config &config, shared_ptr<const DeepImage> image)
+{
+    auto *worldToNDCAttr = image->header.findTypedAttribute<M44fAttribute>("worldToNDC");
+    if(worldToNDCAttr == nullptr)
+	throw exception("Can't create stroke intersections because worldToNDC matrix attribute is missing");
+
+    auto *worldToCameraAttr = image->header.findTypedAttribute<M44fAttribute>("worldToCamera");
+    if(worldToCameraAttr == nullptr)
+	throw exception("Can't create stroke intersections because worldToNDC matrix attribute is missing");
+
+    // Note that the OpenEXR ImfStandardAttributes.h header has a completely wrong
+    // description of worldToNDC that could never work.  It's actually clip space,
+    // with the origin in the center of the window, positive coordinates going
+    // up-right, and requires perspective divide.
+    M44f worldToNDC = worldToNDCAttr->value();
+    M44f worldToCamera = worldToCameraAttr->value();
+    M44f cameraToWorld = worldToCamera.inverse();
+
+    // One point directly in front of the camera, and a second one unit up-right.
+    V3f cameraSpaceReferencePos1(0,0,1);
+    V3f cameraSpaceReferencePos2 = cameraSpaceReferencePos1 + V3f(1,1,0);
+
+    // Convert to world space.
+    V3f worldSpaceReferencePos1 = cameraSpaceReferencePos1 * cameraToWorld;
+    V3f worldSpaceReferencePos2 = cameraSpaceReferencePos2 * cameraToWorld;
+
+    // Convert from world space to NDC.
+    V3f ndcReferencePos1, ndcReferencePos2;
+    worldToNDC.multVecMatrix(worldSpaceReferencePos1, ndcReferencePos1);
+    worldToNDC.multVecMatrix(worldSpaceReferencePos2, ndcReferencePos2);
+
+    // Convert both positions to screen space.
+    Box2i displayWindow = image->header.displayWindow();
+    V2f screenSpace1(
+	scale(ndcReferencePos1[0], -1.0f, +1.0f, float(displayWindow.min.x), float(displayWindow.max.x)),
+	scale(ndcReferencePos1[1], -1.0f, +1.0f, float(displayWindow.max.y), float(displayWindow.min.y)));
+    V2f screenSpace2(
+	scale(ndcReferencePos2[0], -1.0f, +1.0f, float(displayWindow.min.x), float(displayWindow.max.x)),
+	scale(ndcReferencePos2[1], -1.0f, +1.0f, float(displayWindow.max.y), float(displayWindow.min.y)));
+
+    // The distance between these positions is the number of pixels one world space unit covers at
+    // a distance of referenceDistance.
+    V2f screenSpaceDistance = screenSpace2 - screenSpace1;
+
+    /* printf("world1 %.1f %.1f %.1f\nworld2 %.1f %.1f %.1f\nndc1 %.3f %.3f %.3f\nndc2 %.3f %.3f %.3f\ndistance %f %f\n",
+	worldSpaceReferencePos1.x, worldSpaceReferencePos1.y, worldSpaceReferencePos1.z,
+	worldSpaceReferencePos2.x, worldSpaceReferencePos2.y, worldSpaceReferencePos2.z,
+	ndcReferencePos1[0], ndcReferencePos1[1], ndcReferencePos1[2],
+	ndcReferencePos2[0], ndcReferencePos2[1], ndcReferencePos2[2],
+	screenSpaceDistance[0], screenSpaceDistance[1]
+    ); */
+
+    // Return the distance on X covered by one unit in camera space.
+    return screenSpaceDistance[0];
+}
+
 // Create an intersection mask that can be used to create a stroke.  This generates a mask
 // which is set for pixels that neighbor pixels further away.  What we're really looking
 // for is mesh discontinuities: neighboring pixels which are from two different places
 // and not a continuous object.
 //
 // If imageMask is non-null, it's a mask to apply to the layer we're creating a mask for.
+//
+// Note that to make comments easier to follow, this pretends world space units are in cm,
+// like Maya.  "1cm" really just means one world space unit.
 shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageStroke::Config &config,
     shared_ptr<const DeepImage> image, shared_ptr<const TypedDeepImageChannel<float>> imageMask)
 {
@@ -299,6 +360,9 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 	for(int x = 0; x < image->width; x++)
 	    SampleVisibilities[y][x] = DeepImageUtil::GetSampleVisibility(image, x, y);
     }
+
+    // The number of pixels per 1cm, at a distance of 1cm from the camera.
+    float pixelsPerCm = CalculateDepthScale(config, image);
 
     for(int y = 0; y < image->height; y++)
     {
@@ -353,6 +417,36 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 		    float depth1 = Z->Get(x, y, s1);
 		    V3f world1 = P->Get(x, y, s1);
 
+		    // We're looking for sudden changes in depth from one pixel to the next to find
+		    // edges.  However, we need to adjust the threshold based on pixel density.  If
+		    // we're twice as far from the camera, we'll have half as many pixels, which makes
+		    // changes in depth look twice as sudden.  If we don't have enough pixels to
+		    // sample, any two neighboring pixels might look far apart.
+		    //
+		    // config.minPixelsPerCm is the minimum number of pixels that we're allowed to cross in
+		    // 1cm of world space.  If we're crossing less than that, the object is far away or the
+		    // image is low resolution, and we'll begin scaling intersectionMinDistance up, so it takes
+		    // a bigger distance before we detect an edge.
+
+		    // pixelsPerCm is at a depth of 1.  pixelsPerCm / depth is the number of pixels at depth.
+		    float pixelsPerCmAtThisDepth = pixelsPerCm / depth1;
+
+		    // If pixelsPerCmAtThisDepth >= minPixelsPerCm, then we have enough pixels and don't
+		    // need to scale, so depthScale is 1.
+		    //
+		    // If pixelsPerCmAtThisDepth is half minPixelsPerCm, then we're crossing half as many
+		    // pixels per cm as minPixelsPerCm.  depthScale is 2, so we'll double the threshold.
+		    float depthScale = max(1.0f, config.minPixelsPerCm / pixelsPerCmAtThisDepth);
+
+		    /*if(x == TEST_X && y == TEST_Y)
+		    {
+			printf("%ix%i depth %f, pixelsPerCmAtThisDepth %f, depthScale %f\n",
+			    x, y, depth1, pixelsPerCmAtThisDepth, depthScale);
+		    }*/
+
+		    // config.intersectionMinDistance is the distance between pixels where we start to
+		    // add intersection lines, assuming the number of units per pixel is expectedPixelsPerCm.
+
 		    for(int s2 = 0; s2 < image->NumSamples(x2,y2); ++s2)
 		    {
 			if(id->Get(x2,y2,s2) != config.objectId)
@@ -382,19 +476,6 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 				x2, y2, s2, sampleVisibility2,
 				depth2-depth1, distance);
 			} */
-
-			// When the nearer sample is referenceDistance away from the camera, we look
-			// for differences of depth of intersectionMinDistance.  If the sample is twice as far away,
-			// we require the depth to be twice as much.  This accounts for the fact that objects
-			// which are further away have fewer pixels on screen, so samples further apart
-			// are closer together.  If we don't do this, we'll be too aggressive in detecting
-			// contours for far away objects.
-			//
-			// Limit the amount we scale down for objects very close to the camera, so we don't end
-			// up with a very tiny threshold for objects very close to the camera.
-			float referenceDistance = 1000.0f;
-			float depthScale = scale(depth1, referenceDistance, referenceDistance*2, 1.0f, 2.0f);
-			depthScale = max(depthScale, 1/4.0f);
 
 			// Scale depth from the depth range to 0-1.
 			float result = scale(distance,
@@ -525,6 +606,11 @@ EXROperation_Stroke::EXROperation_Stroke(const SharedConfig &sharedConfig_, stri
 	else
 	    throw StringException("Unknown stroke option: " + arg);
     }
+
+    // Adjust worldSpaceScale to world space units.
+    strokeDesc.minPixelsPerCm *= sharedConfig.worldSpaceScale;
+    strokeDesc.intersectionMinDistance *= sharedConfig.worldSpaceScale;
+    strokeDesc.intersectionFade *= sharedConfig.worldSpaceScale;
 }
 
 void EXROperation_Stroke::AddChannels(shared_ptr<DeepImage> image, DeepFrameBuffer &frameBuffer) const

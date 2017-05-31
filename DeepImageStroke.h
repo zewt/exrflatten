@@ -28,6 +28,14 @@ namespace DeepImageStroke
 	float pushTowardsCamera = 1.0f;
 	Imath::V4f strokeColor = {0,0,0,1};
 
+	// The minimum number of pixels that can be covered by one world space unit before
+	// we begin to scale intersectionMinDistance up to compensate for the low resolution.
+	// At 5, we want at least 5 pixels per cm.
+	//
+	// This default is intended for cm.  If worldSpaceScale is 100 for meters, this will be
+	// scaled to 500, giving a minimum of 500 pixels per meter.
+	float minPixelsPerCm = 5;
+
 	bool strokeIntersections = false;
 	float intersectionMinDistance = 1.0f;
 	float intersectionFade = 1.0f;
