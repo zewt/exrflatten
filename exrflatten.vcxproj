@@ -98,6 +98,7 @@
     <ClCompile Include="DeepImageMasks.cpp" />
     <ClCompile Include="DeepImageUtil.cpp" />
     <ClCompile Include="exrflatten.cpp" />
+    <ClCompile Include="EXROperation.cpp" />
     <ClCompile Include="EXROperation_WriteLayers.cpp" />
     <ClCompile Include="exrsamples.cpp" />
     <ClCompile Include="helpers.cpp" />

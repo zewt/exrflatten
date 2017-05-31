@@ -19,21 +19,7 @@ struct SharedConfig
     string outputPath;
     vector<string> inputFilenames;
 
-    bool ParseOption(string opt, string value)
-    {
-	if(opt == "input")
-	{
-	    inputFilenames.push_back(value);
-	    return true;
-	}
-	else if(opt == "output")
-	{
-	    outputPath = value;
-	    return true;
-	}
-
-	return false;
-    }
+    bool ParseOption(string opt, string value);
 
     // Given a filename, return the path to save it.
     string GetFilename(string filename) const
