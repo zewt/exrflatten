@@ -529,8 +529,8 @@ EXROperation_Stroke::EXROperation_Stroke(const SharedConfig &sharedConfig_, stri
 
 void EXROperation_Stroke::AddChannels(shared_ptr<DeepImage> image, DeepFrameBuffer &frameBuffer) const
 {
-    image->AddChannelToFramebuffer<V3f>("P", frameBuffer, false);
-
+    if(strokeDesc.strokeIntersections)
+	image->AddChannelToFramebuffer<V3f>("P", frameBuffer, false);
     if(!strokeDesc.strokeMaskChannel.empty())
 	image->AddChannelToFramebuffer<float>(strokeDesc.strokeMaskChannel, frameBuffer, true);
     if(!strokeDesc.intersectionMaskChannel.empty())
