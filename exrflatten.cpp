@@ -55,21 +55,12 @@ public:
     {
 	auto flat = DeepImageUtil::CollapseEXR(image);
 
-	string f = GetFilename();
+	string f = sharedConfig.GetFilename(filename);
 	printf("Writing %s\n", f.c_str());
 	flat->WriteEXR(f);
     }
 
 private:
-    string GetFilename() const
-    {
-	string result = sharedConfig.outputPath;
-	if(!result.empty())
-	    result += "/";
-	result += filename;
-	return result;
-    }
-
     string filename;
     const SharedConfig &sharedConfig;
 };
