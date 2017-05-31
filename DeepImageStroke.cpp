@@ -624,7 +624,7 @@ void EXROperation_Stroke::AddChannels(shared_ptr<DeepImage> image, DeepFrameBuff
 }
 
 /*
- * Based on https://github.com/vinniefalco/LayerEffects/blo
+ * Based on https://github.com/vinniefalco/LayerEffects/blob/master/Extern/VFLib/modules/vf_unfinished/graphics/vf_DistanceTransform.h
  *
  * Copyright (c) 2012 Vinnie Falco
  *
