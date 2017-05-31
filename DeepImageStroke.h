@@ -31,6 +31,8 @@ namespace DeepImageStroke
 	bool strokeIntersections = false;
 	float intersectionMinDistance = 1.0f;
 	float intersectionFade = 1.0f;
+
+	string saveIntersectionMask;
     };
 
     // Calculate euclidean distance from each pixel to the nearest pixel where GetMask returns 0.

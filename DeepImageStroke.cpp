@@ -461,8 +461,13 @@ void EXROperation_Stroke::AddStroke(const DeepImageStroke::Config &config, share
     // Create the intersection mask.  It's important that we do this before applying the stroke.
     shared_ptr<SimpleImage> intersectionMask;
     if(config.strokeIntersections)
+    {
 	intersectionMask = CreateIntersectionMask(config, image, intersectionVisibilityMask);
-    //if(intersectionStrokeMask) intersectionStrokeMask->WriteEXR("test.exr");
+
+	// This is just for diagnostics.
+	if(!config.saveIntersectionMask.empty())
+	    intersectionMask->WriteEXR(sharedConfig.GetFilename(config.saveIntersectionMask));
+    }
 
     // Apply the regular stroke and the intersection stroke.
     ApplyStrokeUsingMask(config, image, strokeMask);
@@ -515,6 +520,8 @@ EXROperation_Stroke::EXROperation_Stroke(const SharedConfig &sharedConfig_, stri
 	    strokeDesc.intersectionMinDistance = (float) atof(value.c_str());
 	else if(arg == "intersection-fade")
 	    strokeDesc.intersectionFade = (float) atof(value.c_str());
+	else if(arg == "intersection-save-mask")
+	    strokeDesc.saveIntersectionMask = sharedConfig.GetFilename(value);
 	else
 	    throw StringException("Unknown stroke option: " + arg);
     }
