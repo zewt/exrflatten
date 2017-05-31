@@ -19,6 +19,11 @@ struct SharedConfig
     string outputPath;
     vector<string> inputFilenames;
 
+    // Tunable distance values are in cm.  This can be used to adjust all distances for
+    // scenes with a different scale.  If you're in meters, this should be 100, to indicate
+    // that a unit is 100x bigger than we expect.  For feet, use 30.48.
+    float worldSpaceScale = 1.0f;
+
     bool ParseOption(string opt, string value);
 
     // Given a filename, return the path to save it.
