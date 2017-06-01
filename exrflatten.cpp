@@ -12,6 +12,7 @@
 #include <OpenEXR/ImathBox.h>
 #include <OpenEXR/ImfDeepFrameBuffer.h>
 #include <OpenEXR/ImfChannelList.h>
+#include <OpenEXR/ImfStringAttribute.h>
 #include <OpenEXR/Iex.h>
 
 #include "DeepImage.h"
@@ -22,6 +23,7 @@
 
 #include "EXROperation.h"
 #include "EXROperation_WriteLayers.h"
+#include "EXROperation_FixArnold.h"
 
 using namespace std;
 using namespace Imf;
@@ -197,12 +199,16 @@ void Config::Run() const
 	images.push_back(image);
 
 	// Work around bad Arnold channels: non-color channels get multiplied by alpha.
-	auto rgba = image->GetChannel<V4f>("rgba");
-	for(auto it: image->channels)
+	// Note that this doesn't include P, which is handled by EXROperation_FixArnold.
+	if(image->header.findTypedAttribute<StringAttribute>("arnold/version") != NULL)
 	{
-	    shared_ptr<DeepImageChannel> channel = it.second;
-	    if(channel->needsAlphaDivide)
-		channel->UnpremultiplyChannel(rgba);
+	    auto rgba = image->GetChannel<V4f>("rgba");
+	    for(auto it: image->channels)
+	    {
+		shared_ptr<DeepImageChannel> channel = it.second;
+		if(channel->needsAlphaDivide)
+		    channel->UnpremultiplyChannel(rgba);
+	    }
 	}
     }
 
@@ -253,7 +259,7 @@ int main(int argc, char **argv)
     try {
 	Config config;
 	config.ParseOptions(GetArgs(argc, argv));
-
+	config.operations.insert(config.operations.begin(), make_shared<EXROperation_FixArnold>());
 	config.Run();
     }
     catch(const exception &e)

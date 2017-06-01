@@ -99,6 +99,7 @@
     <ClCompile Include="DeepImageUtil.cpp" />
     <ClCompile Include="exrflatten.cpp" />
     <ClCompile Include="EXROperation.cpp" />
+    <ClCompile Include="EXROperation_FixArnold.cpp" />
     <ClCompile Include="EXROperation_WriteLayers.cpp" />
     <ClCompile Include="exrsamples.cpp" />
     <ClCompile Include="helpers.cpp" />
@@ -110,6 +111,7 @@
     <ClInclude Include="DeepImageMasks.h" />
     <ClInclude Include="DeepImageUtil.h" />
     <ClInclude Include="EXROperation.h" />
+    <ClInclude Include="EXROperation_FixArnold.h" />
     <ClInclude Include="EXROperation_WriteLayers.h" />
     <ClInclude Include="exrsamples.h" />
     <ClInclude Include="helpers.h" />
