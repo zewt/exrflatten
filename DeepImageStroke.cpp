@@ -1105,7 +1105,8 @@ void EXROperation_Stroke::AddStroke(const DeepImageStroke::Config &config, share
     }
 
     // Apply the regular stroke and the intersection stroke.
-    ApplyStrokeUsingMask(config, image, strokeMask);
+    if(config.strokeOutline)
+	ApplyStrokeUsingMask(config, image, strokeMask);
     if(config.strokeIntersections)
 	ApplyStrokeUsingMask(config, image, intersectionMask);
 }
@@ -1149,6 +1150,11 @@ EXROperation_Stroke::EXROperation_Stroke(const SharedConfig &sharedConfig_, stri
 	    strokeDesc.strokeMaskChannel = value;
 	else if(arg == "intersection-mask")
 	    strokeDesc.intersectionMaskChannel = value;
+	else if(arg == "intersections-only")
+	{
+	    strokeDesc.strokeIntersections = true;
+	    strokeDesc.strokeOutline = false;
+	}
 	else if(arg == "intersections")
 	    strokeDesc.strokeIntersections = true;
 	else if(arg == "intersection-min-distance")

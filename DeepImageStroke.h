@@ -36,6 +36,7 @@ namespace DeepImageStroke
 	// scaled to 500, giving a minimum of 500 pixels per meter.
 	float minPixelsPerCm = 5;
 
+	bool strokeOutline = true;
 	bool strokeIntersections = false;
 	float intersectionMinDistance = 1.0f;
 	float intersectionFade = 1.0f;
