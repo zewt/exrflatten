@@ -87,10 +87,9 @@ The [--stroke](#operation--stroke) command adds strokes:
 
 ``--stroke=1 --radius=1 --intersections``
 
-- id specifies the object ID to stroke.  This is the only required argument.
-- radius sets the thickness of the stroke.
-- If "intersections" is present, intersection lines will be drawn.  Otherwise, only a regular
-stroke will be drawn.
+- 1 is the object ID to stroke.
+- --radius sets the thickness of the stroke.
+- --intersections causes intersection lines tol be drawn.
 
 See [--stroke](#operation---stroke) for a complete list of arguments.
 
@@ -173,6 +172,12 @@ both in front of and behind your characters.  You have to separate foreground an
 elements yourself to composite them correctly.  That's one of the problems that deep compositing
 solves, and EXR layering provides that solution to simple compositing as well.
 
+# Scene scale
+
+Some operations are dependent on scene scale.  By default, the input is expected to be in 1cm
+scale.  If your scene has a different scale, this can be set with ``--scale=meters``, ``--scale=feet``,
+or an arbitrary scale such as ``--scale=100`` (also meters).
+
 # Layering details
 
 The output should be correct regardless of the order you specify for layers.  If an object
@@ -226,12 +231,14 @@ any changes made by earlier commands.
 
 ### Global options
 
-Global options can appear anywhere on the commandline and are unaffected by order:
+Global options come first on the commandline:
 
 **--input=file.exr** Adds an input file.  All input files will be read and combined before executing
 any commands.  
 **--output=path** Specify the directory to hold input files.  This path will be prefixed to
 all output paths.  
+**--scale=[cm|meters|feet|#]** Set the scene scale (default: cm).  "meters" is an alias for 100,
+and "feet" is an alias for 30.48.
 
 ### Operation: --save-flattened
 
