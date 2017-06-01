@@ -34,10 +34,14 @@ vector<string> DeepImageUtil::GetChannelsInLayer(const Header &header, string la
     // Work around this by having a list of channels and their canonical order, and sorting
     // channels in that order.  This could be optimized to avoid searching channelOrder, but
     // it's not useful since we're sorting arrays of 3 or 4 elements.
+    //
+    // This is complicated by another silliness: "Y" can mean a Y coordinate or luminance.
+    // We want to make sure both the orders "XYZ" and "YRyByA" are preserved, so make sure
+    // XYZ is at the front of the list.
     static const vector<string> channelOrder = {
-	"R", "G", "B", "Y", "RY", "BY",
+	"X", "Y", "Z",
+	"R", "G", "B", /* "Y", */ "RY", "BY",
 	"A", "AR", "AG", "AB",
-	"X", "Y", "Z"
     };
     sort(result.begin(), result.end(), [&layerName](string lhs, string rhs) {
 	lhs = lhs.substr(layerName.size()+1); // diffuse.G -> G
