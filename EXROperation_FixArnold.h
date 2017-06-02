@@ -17,7 +17,7 @@ class EXROperation_FixArnold: public EXROperation
 public:
     EXROperation_FixArnold() { }
     void AddChannels(shared_ptr<DeepImage> image, Imf::DeepFrameBuffer &frameBuffer) const;
-    void Run(shared_ptr<DeepImage> image) const;
+    void Run(shared_ptr<EXROperationState> state) const;
 
 private:
     bool IsArnold(shared_ptr<DeepImage> image) const;

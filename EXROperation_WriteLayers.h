@@ -15,7 +15,7 @@ public:
     EXROperation_WriteLayers(const SharedConfig &sharedConfig, string opt, vector<pair<string,string>> arguments);
 
     void AddChannels(shared_ptr<DeepImage> image, Imf::DeepFrameBuffer &frameBuffer) const;
-    void Run(shared_ptr<DeepImage> image) const;
+    void Run(shared_ptr<EXROperationState> state) const;
 
 private:
     const SharedConfig &sharedConfig;

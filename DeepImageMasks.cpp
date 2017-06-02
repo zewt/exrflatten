@@ -241,9 +241,9 @@ EXROperation_CreateMask::EXROperation_CreateMask(const SharedConfig &sharedConfi
 	throw StringException("--create-mask: no --name was specified");
 }
 
-void EXROperation_CreateMask::Run(shared_ptr<DeepImage> image) const
+void EXROperation_CreateMask::Run(shared_ptr<EXROperationState> state) const
 {
-    createMask.Create(image);
+    createMask.Create(state->image);
 }
 
 void EXROperation_CreateMask::AddChannels(shared_ptr<DeepImage> image, DeepFrameBuffer &frameBuffer) const

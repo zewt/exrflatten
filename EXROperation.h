@@ -35,6 +35,12 @@ struct SharedConfig
     }
 };
 
+struct EXROperationState
+{
+    // The image to work with.
+    shared_ptr<DeepImage> image;
+};
+
 class EXROperation
 {
 public:
@@ -42,7 +48,7 @@ public:
     virtual void AddChannels(shared_ptr<DeepImage> image, Imf::DeepFrameBuffer &frameBuffer) const { };
 
     // Run the operation on the DeepImage.
-    virtual void Run(shared_ptr<DeepImage> image) const = 0;
+    virtual void Run(shared_ptr<EXROperationState> state) const = 0;
 };
 
 #endif

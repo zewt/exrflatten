@@ -66,7 +66,7 @@ class EXROperation_CreateMask: public EXROperation
 {
 public:
     EXROperation_CreateMask(const SharedConfig &sharedConfig, string opt, vector<pair<string,string>> arguments);
-    void Run(shared_ptr<DeepImage> image) const;
+    void Run(shared_ptr<EXROperationState> state) const;
     void AddChannels(shared_ptr<DeepImage> image, Imf::DeepFrameBuffer &frameBuffer) const;
 
 private:

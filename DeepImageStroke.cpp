@@ -1095,9 +1095,9 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
     return mask;
 }
 
-void EXROperation_Stroke::Run(shared_ptr<DeepImage> image) const
+void EXROperation_Stroke::Run(shared_ptr<EXROperationState> state) const
 {
-    AddStroke(strokeDesc, image);
+    AddStroke(strokeDesc, state->image);
 
     // Re-sort samples, since new samples may have been added.
     DeepImageUtil::SortSamplesByDepth(image);
@@ -1106,11 +1106,11 @@ void EXROperation_Stroke::Run(shared_ptr<DeepImage> image) const
 void EXROperation_Stroke::AddStroke(const DeepImageStroke::Config &config, shared_ptr<DeepImage> image) const
 {
     // The user masks that control where we apply strokes and intersection lines:
-    shared_ptr<TypedDeepImageChannel<float>> strokeVisibilityMask;
+    shared_ptr<const TypedDeepImageChannel<float>> strokeVisibilityMask;
     if(!config.strokeMaskChannel.empty())
 	strokeVisibilityMask = image->GetChannel<float>(config.strokeMaskChannel);
 
-    shared_ptr<TypedDeepImageChannel<float>> intersectionVisibilityMask;
+    shared_ptr<const TypedDeepImageChannel<float>> intersectionVisibilityMask;
     if(!config.intersectionMaskChannel.empty())
 	intersectionVisibilityMask = image->GetChannel<float>(config.intersectionMaskChannel);
 

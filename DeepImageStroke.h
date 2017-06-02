@@ -73,7 +73,7 @@ class EXROperation_Stroke: public EXROperation
 {
 public:
     EXROperation_Stroke(const SharedConfig &sharedConfig, string opt, vector<pair<string,string>> args);
-    void Run(shared_ptr<DeepImage> image) const;
+    void Run(shared_ptr<EXROperationState> state) const;
     void AddChannels(shared_ptr<DeepImage> image, Imf::DeepFrameBuffer &frameBuffer) const;
 
 private:

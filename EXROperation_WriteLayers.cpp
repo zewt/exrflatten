@@ -64,8 +64,9 @@ void EXROperation_WriteLayers::AddChannels(shared_ptr<DeepImage> image, DeepFram
 	image->AddChannelToFramebuffer<float>(maskDesc.maskChannel, frameBuffer, true);
 }
 
-void EXROperation_WriteLayers::Run(shared_ptr<DeepImage> image) const
+void EXROperation_WriteLayers::Run(shared_ptr<EXROperationState> state) const
 {
+    shared_ptr<DeepImage> image = state->image;
     vector<Layer> layers;
 
     vector<LayerDesc> layerDescsCopy = layerDescs;

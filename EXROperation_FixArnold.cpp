@@ -22,8 +22,9 @@ void EXROperation_FixArnold::AddChannels(shared_ptr<DeepImage> image, Imf::DeepF
     image->AddChannelToFramebuffer<V3f>("P", frameBuffer, false);
 }
 
-void EXROperation_FixArnold::Run(shared_ptr<DeepImage> image) const
+void EXROperation_FixArnold::Run(shared_ptr<EXROperationState> state) const
 {
+    shared_ptr<DeepImage> image = state->image;
     if(!IsArnold(image))
 	return;
 

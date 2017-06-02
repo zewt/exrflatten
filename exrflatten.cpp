@@ -53,9 +53,9 @@ public:
 	filename = opt;
     }
 
-    void Run(shared_ptr<DeepImage> image) const
+    void Run(shared_ptr<EXROperationState> state) const
     {
-	auto flat = DeepImageUtil::CollapseEXR(image);
+	auto flat = DeepImageUtil::CollapseEXR(state->image);
 
 	string f = sharedConfig.GetFilename(filename);
 	printf("Writing %s\n", f.c_str());
@@ -223,8 +223,10 @@ void Config::Run() const
     // of "tidying", splitting samples where they overlap using splitVolumeSample.
     DeepImageUtil::SortSamplesByDepth(image);
 
+    auto state = make_shared<EXROperationState>();
+    state->image = image;
     for(auto op: operations)
-	op->Run(image);
+	op->Run(state);
 }
 
 vector<pair<string,string>> GetArgs(int argc, char **argv)
