@@ -28,6 +28,14 @@ public:
     virtual DeepImageChannel *CreateSameType(const Imf::Array2D<unsigned int> &sampleCount) const = 0;
     virtual void CopySamples(shared_ptr<const DeepImageChannel> OtherChannel, int x, int y, int firstIdx) = 0;
 
+    // Get a blind pointer to the data.  The result is a packed array of pointers.
+    virtual char **GetSamplesBlind() = 0;
+    virtual const char * const*GetSamplesBlind() const = 0;
+
+    // Get the number of bytes per sample.  This can be used with GetSamplesBlind() to copy sample
+    // data without knowing its type.
+    virtual int GetBytesPerSample() const = 0;
+
     // Arnold multiplies channels by alpha that shouldn't be.  Premultiplying only makes sense for
     // color channels, but Arnold does it with world space positions and other data.  If this is
     // true, this is a channel that we need to divide by alpha to work around this problem.
@@ -64,6 +72,20 @@ public:
     {
 	return data[y][x];
     }
+
+    char **GetSamplesBlind()
+    {
+	T **p = &data[0][0];
+	return (char **) p;
+    }
+
+    const char * const*GetSamplesBlind() const
+    {
+	const T * const*p = &data[0][0];
+	return (char **) p;
+    }
+
+    virtual int GetBytesPerSample() const { return sizeof(T); }
 
     // Get a sample for for the given pixel.
     const T &Get(int x, int y, int sample) const

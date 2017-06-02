@@ -355,22 +355,28 @@ vector<float> DeepImageUtil::GetSampleVisibility(shared_ptr<const DeepImage> ima
     return result;
 }
 
+namespace {
+    void SumSampleCounts(Array2D<unsigned int> &totalSampleCount, const vector<shared_ptr<DeepImage>> &images)
+    {
+	for(int y = 0; y < totalSampleCount.height(); y++)
+	{
+	    for(int x = 0; x < totalSampleCount.width(); x++)
+	    {
+		totalSampleCount[y][x] = 0;
+		for(auto image: images)
+		    totalSampleCount[y][x] += image->sampleCount[y][x];
+	    }
+	}
+    }
+}
+
 shared_ptr<DeepImage> DeepImageUtil::CombineImages(vector<shared_ptr<DeepImage>> images)
 {
     shared_ptr<DeepImage> result = make_shared<DeepImage>(images[0]->width, images[0]->height);
     DeepImageUtil::CopyLayerAttributes(images[0]->header, result->header);
 
     // Sum up the sampleCount for all images.
-    Array2D<unsigned int> &totalSampleCount = result->sampleCount;
-    for(int y = 0; y < result->height; y++)
-    {
-	for(int x = 0; x < result->width; x++)
-	{
-	    result->sampleCount[y][x] = 0;
-	    for(auto image: images)
-		result->sampleCount[y][x] += image->sampleCount[y][x];
-	}
-    }
+    SumSampleCounts(result->sampleCount, images);
 
     for(auto it: images[0]->channels)
     {
@@ -381,6 +387,34 @@ shared_ptr<DeepImage> DeepImageUtil::CombineImages(vector<shared_ptr<DeepImage>>
 	shared_ptr<DeepImageChannel> newChannel(channel->CreateSameType(result->sampleCount));
 	result->channels[channelName] = newChannel;
 
+	Array2D<unsigned int> sampleCountSoFar;
+	sampleCountSoFar.resizeErase(result->height, result->width);
+
+#if 1
+	// Copy samples from each input image.  This is optimized by getting a raw pointer to
+	// the samples and copying data directly.
+	for(auto image: images)
+	{
+	    shared_ptr<const DeepImageChannel> srcChannel = map_get(image->channels, channelName, nullptr);
+
+	    const char * const*srcData = srcChannel->GetSamplesBlind();
+	          char **dstData = newChannel->GetSamplesBlind();
+	    int BytesPerSample = newChannel->GetBytesPerSample();
+	    for(int y = 0; y < result->height; y++)
+	    {
+		const unsigned int *SampleCounts = image->sampleCount[y];
+		for(int x = 0; x < result->width; x++)
+		{
+		    const char *pSrc = srcData[x + y*result->width];
+		    char *pDst = dstData[x + y*result->width];
+		    pDst += sampleCountSoFar[y][x] * BytesPerSample;
+		    memcpy(pDst, pSrc, BytesPerSample*SampleCounts[x]);
+
+		    sampleCountSoFar[y][x] += SampleCounts[x];
+		}
+	    }
+	}
+#else
 	// Copy samples from each input image.
 	for(int y = 0; y < result->height; y++)
 	{
@@ -398,6 +432,7 @@ shared_ptr<DeepImage> DeepImageUtil::CombineImages(vector<shared_ptr<DeepImage>>
 		}
 	    }
 	}
+#endif
     }
 
     return result;
