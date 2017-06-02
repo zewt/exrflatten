@@ -96,9 +96,14 @@ void EXROperation_WriteLayers::Run(shared_ptr<DeepImage> image) const
 	    layerOrder[layerDesc.objectId] = next++;
     }
 
-    // Collapse any object IDs that aren't associated with layers into the default layer
-    // to use with layer separation.
+    // Combine layers.  This just changes the object IDs of samples, so we don't need to re-sort.
     shared_ptr<TypedDeepImageChannel<uint32_t>> collapsedId(image->GetChannel<uint32_t>("id")->Clone());
+    for(auto combine: combines)
+	DeepImageUtil::CombineObjectId(collapsedId, combine.second, combine.first);
+
+    // Collapse any object IDs that aren't associated with layers into the default layer
+    // to use with layer separation.  Do this after combines, so if we collapsed an object
+    // ID into one that isn't being output, we also collapse those into NO_OBJECT_ID.
     for(int y = 0; y < image->height; y++)
     {
 	for(int x = 0; x < image->width; x++)
@@ -111,10 +116,6 @@ void EXROperation_WriteLayers::Run(shared_ptr<DeepImage> image) const
 	    }
 	}
     }
-
-    // Combine layers.  This just changes the object IDs of samples, so we don't need to re-sort.
-    for(auto combine: combines)
-	DeepImageUtil::CombineObjectId(collapsedId, combine.second, combine.first);
 
     // Separate the image into layers.
     int nextOrder = 1;
