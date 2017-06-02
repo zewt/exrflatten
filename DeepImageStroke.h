@@ -64,7 +64,9 @@ namespace DeepImageStroke
 
     shared_ptr<SimpleImage> CreateIntersectionMask(const DeepImageStroke::Config &config,
 	shared_ptr<const DeepImage> image, shared_ptr<const TypedDeepImageChannel<float>> imageMask);
-    void ApplyStrokeUsingMask(const DeepImageStroke::Config &config, shared_ptr<DeepImage> image, shared_ptr<SimpleImage> mask);
+    void ApplyStrokeUsingMask(const DeepImageStroke::Config &config,
+	shared_ptr<const DeepImage> image, shared_ptr<DeepImage> outputImage,
+	shared_ptr<SimpleImage> mask);
 }
 
 // Use DeepImageStroke to add a stroke.
@@ -77,7 +79,7 @@ public:
     void AddChannels(shared_ptr<DeepImage> image, Imf::DeepFrameBuffer &frameBuffer) const;
 
 private:
-    void AddStroke(const DeepImageStroke::Config &config, shared_ptr<DeepImage> image) const;
+    void AddStroke(const DeepImageStroke::Config &config, shared_ptr<const DeepImage> image, shared_ptr<DeepImage> outputImage) const;
 
     const SharedConfig &sharedConfig;
     DeepImageStroke::Config strokeDesc;

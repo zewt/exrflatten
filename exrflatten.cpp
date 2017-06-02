@@ -225,8 +225,20 @@ void Config::Run() const
 
     auto state = make_shared<EXROperationState>();
     state->image = image;
+    shared_ptr<EXROperation> prevOp;
     for(auto op: operations)
+    {
+	// If this op is a different type than the previous, and we have new images waiting to be
+	// merged into the main one, do so now.
+	if(prevOp && typeid(*prevOp.get()) != typeid(*op.get()) && !state->waitingImages.empty())
+	{
+	    // printf("Merging images\n");
+	    state->CombineWaitingImages();
+	}
+
 	op->Run(state);
+	prevOp = op;
+    }
 }
 
 vector<pair<string,string>> GetArgs(int argc, char **argv)

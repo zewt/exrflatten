@@ -698,11 +698,10 @@ void test()
 }
 #endif
 
-void DeepImageStroke::ApplyStrokeUsingMask(const DeepImageStroke::Config &config, shared_ptr<DeepImage> image, shared_ptr<SimpleImage> mask)
+void DeepImageStroke::ApplyStrokeUsingMask(const DeepImageStroke::Config &config, shared_ptr<const DeepImage> image, shared_ptr<DeepImage> outputImage, shared_ptr<SimpleImage> mask)
 {
     auto rgba = image->GetChannel<V4f>("rgba");
     auto id = image->GetChannel<uint32_t>("id");
-    auto ZBack = image->GetChannel<float>("ZBack");
     auto Z = image->GetChannel<float>("Z");
 
     // Find closest sample (for our object ID) to the camera for each point.
@@ -741,8 +740,8 @@ void DeepImageStroke::ApplyStrokeUsingMask(const DeepImageStroke::Config &config
 	return alpha;
     }, [&](int x, int y, int sx, int sy, float distance) {
 	float alpha = DistanceAndRadiusToAlpha(distance + 0.5f, config);
-	if(x == TEST_X && y == TEST_Y)
-	    printf("-> distance %.13f, alpha %.13f, source %ix%i\n", distance, alpha, sx, sy);
+	//if(x == TEST_X && y == TEST_Y)
+	//    printf("-> distance %.13f, alpha %.13f, source %ix%i\n", distance, alpha, sx, sy);
 #if 0
 	image->AddSample(x, y);
 	rgba->GetLast(x,y) = V4f(distance, distance, distance, 1);
@@ -824,12 +823,17 @@ void DeepImageStroke::ApplyStrokeUsingMask(const DeepImageStroke::Config &config
 	    return;
 
 	// Add a sample for the stroke.
-	image->AddSample(x, y);
+	outputImage->AddSample(x, y);
 
-	rgba->GetLast(x,y) = mixedColor;
-	Z->GetLast(x,y) = zDistance;
-	ZBack->GetLast(x,y) = zDistance;
-	id->GetLast(x,y) = config.outputObjectId != -1? config.outputObjectId:config.objectId;
+	auto rgbaOut = outputImage->GetChannel<V4f>("rgba");
+	auto idOut = outputImage->GetChannel<uint32_t>("id");
+	auto ZBackOut = outputImage->GetChannel<float>("ZBack");
+	auto ZOut = outputImage->GetChannel<float>("Z");
+
+	rgbaOut->GetLast(x,y) = mixedColor;
+	ZOut->GetLast(x,y) = zDistance;
+	ZBackOut->GetLast(x,y) = zDistance;
+	idOut->GetLast(x,y) = config.outputObjectId != -1? config.outputObjectId:config.objectId;
     });
 }
 
@@ -1097,13 +1101,13 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 
 void EXROperation_Stroke::Run(shared_ptr<EXROperationState> state) const
 {
-    AddStroke(strokeDesc, state->image);
-
-    // Re-sort samples, since new samples may have been added.
-    DeepImageUtil::SortSamplesByDepth(image);
+    // Output stroke samples to an output image that we'll combine later, and not
+    // directly into the image.  If multiple strokes are added, we don't want later
+    // strokes to be affected by the strokes of earlier images.
+    AddStroke(strokeDesc, state->image, state->GetOutputImage());
 }
 
-void EXROperation_Stroke::AddStroke(const DeepImageStroke::Config &config, shared_ptr<DeepImage> image) const
+void EXROperation_Stroke::AddStroke(const DeepImageStroke::Config &config, shared_ptr<const DeepImage> image, shared_ptr<DeepImage> outputImage) const
 {
     // The user masks that control where we apply strokes and intersection lines:
     shared_ptr<const TypedDeepImageChannel<float>> strokeVisibilityMask;
@@ -1132,9 +1136,9 @@ void EXROperation_Stroke::AddStroke(const DeepImageStroke::Config &config, share
 
     // Apply the regular stroke and the intersection stroke.
     if(config.strokeOutline)
-	ApplyStrokeUsingMask(config, image, strokeMask);
-    if(config.strokeIntersections)
-	ApplyStrokeUsingMask(config, image, intersectionMask);
+	ApplyStrokeUsingMask(config, image, outputImage, strokeMask);
+    if(config.strokeIntersections && intersectionMask)
+	ApplyStrokeUsingMask(config, image, outputImage, intersectionMask);
 }
 
 static V4f ParseColor(const string &str)

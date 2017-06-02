@@ -37,8 +37,33 @@ struct SharedConfig
 
 struct EXROperationState
 {
+    // An operation can modify state->image directly, and it and other operations will
+    // see the changes immediately, but this isn't always wanted.  GetOutputImage can be
+    // called to get a separate image.  This will have the same dimensions and channels
+    // as state->image, with empty channels.  Samples can be added to this image, and they'll
+    // be combined into the final image later.
+    //
+    // This is useful when multiple operations want to add samples to the image, without seeing
+    // any of the samples added by previous operations.  The samples will be queued up in the
+    // temporary image so all of the operations can do their work, then they'll be combined
+    // later.
+    //
+    // Note that GetOutputImage will always return the same temporary image, and not create
+    // a new temporary image each time it's called.  This is only used to store samples, so
+    // allocating a new one for each operation would just take longer.
+    shared_ptr<DeepImage> GetOutputImage();
+
+    // Combine all images created by GetOutputImage into image.
+    void CombineWaitingImages();
+
     // The image to work with.
     shared_ptr<DeepImage> image;
+
+    // If an operation calls CreateNewImage, this is the image it created.
+    shared_ptr<DeepImage> newImage;
+
+    // All newImages that have been created, which are waiting to be merged into image.
+    vector<shared_ptr<DeepImage>> waitingImages;
 };
 
 class EXROperation
