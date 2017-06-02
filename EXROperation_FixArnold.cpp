@@ -15,17 +15,19 @@ bool EXROperation_FixArnold::IsArnold(shared_ptr<DeepImage> image) const
 
 void EXROperation_FixArnold::AddChannels(shared_ptr<DeepImage> image, Imf::DeepFrameBuffer &frameBuffer) const
 {
-    // This is only needed for Arnold (hopefully).
-    if(!IsArnold(image))
-	return;
-
-    image->AddChannelToFramebuffer<V3f>("P", frameBuffer, false);
+    // Don't add P here.  We only want to fix P if it's added by another operation,
+    // not add it and fix it if nobody needs it.
 }
 
 void EXROperation_FixArnold::Run(shared_ptr<EXROperationState> state) const
 {
     shared_ptr<DeepImage> image = state->image;
     if(!IsArnold(image))
+	return;
+
+    // If there's no P channel, we don't need to do this.
+    auto P = image->GetChannel<V3f>("P");
+    if(P == nullptr)
 	return;
 
     auto *worldToNDCAttr = image->header.findTypedAttribute<M44fAttribute>("worldToNDC");
@@ -52,7 +54,7 @@ void EXROperation_FixArnold::Run(shared_ptr<EXROperationState> state) const
     };
 
     auto rgba = image->GetChannel<V4f>("rgba");
-    auto P = image->GetChannel<V3f>("P");
+
     float errorCountDirect = 0;
     float errorCountUnpremultiplied = 0;
     for(int y = 0; y < image->height; y++)
