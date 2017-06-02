@@ -1126,7 +1126,7 @@ void EXROperation_Stroke::AddStroke(const DeepImageStroke::Config &config, share
 	intersectionMask = CreateIntersectionMask(config, image, intersectionVisibilityMask);
 
 	// This is just for diagnostics.
-	if(!config.saveIntersectionMask.empty())
+	if(intersectionMask && !config.saveIntersectionMask.empty())
 	    intersectionMask->WriteEXR(config.saveIntersectionMask);
     }
 
