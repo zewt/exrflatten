@@ -788,10 +788,11 @@ void DeepImageStroke::ApplyStrokeUsingMask(const DeepImageStroke::Config &config
 	// zDistance = 0;
 
 	/*
-	 * An outer stroke is normally blended underneath the shape, and only antialiased on
+	 * An outer stroke is logically blended underneath the shape, and only antialiased on
 	 * the outer edge of the stroke.  The inner edge where the stroke meets the shape isn't
 	 * antialiased.  Instead, the antialiasing of the shape on top of it is what gives the
-	 * smooth blending from the stroke to the shape.
+	 * smooth blending from the stroke to the shape.  For intersection lines, the stroke
+	 * is between the source sample and samples below it.
 	 *
 	 * However, we want to put the stroke over the shape, not underneath it, so it can go over
 	 * other stroked objects.  Deal with this by mixing the existing color over the stroke color.
@@ -907,7 +908,28 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
     // Create a mask using simple edge detection.
     auto id = image->GetChannel<uint32_t>("id");
     auto Z = image->GetChannel<float>("Z");
+
+    // P and/or N will be NULL if intersectionsUseDistance or intersectionsUseNormals are false.
     auto P = image->GetChannel<V3f>("P");
+    auto N = image->GetChannel<V3f>("N");
+
+    if(config.intersectionsUseDistance && P == nullptr)
+    {
+	printf("Warning: No P layer is present, so stroke intersections can only use normals.  If this is\n");
+	printf("what you meant, the --intersection-ignore-distance argument will suppress this message.\n");
+    }
+
+    if(config.intersectionsUseNormals && N == nullptr)
+    {
+	printf("Warning: No N channel is present, so stroke intersections can only use positions.  If this is\n");
+	printf("what you meant, the --intersection-ignore-normals argument will suppress this message.\n");
+    }
+
+    if(P == nullptr && N == nullptr)
+    {
+	printf("Error: No P or N channel is active, so stroke intersections can't be created.\n");
+	return nullptr;
+    }
 
     Array2D<vector<float>> SampleVisibilities;
     SampleVisibilities.resizeErase(image->height, image->width);
@@ -969,7 +991,8 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 			continue;
 
 		    float depth1 = Z->Get(x, y, s1);
-		    V3f world1 = P->Get(x, y, s1);
+		    V3f world1 = P? P->Get(x, y, s1):V3f(0,0,0);
+		    V3f normal1 = N? N->Get(x, y, s1).normalized():V3f(1,0,0);
 
 		    // We're looking for sudden changes in depth from one pixel to the next to find
 		    // edges.  However, we need to adjust the threshold based on pixel density.  If
@@ -1017,7 +1040,9 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 			if(depth2 < depth1)
 			    continue;
 
-			V3f world2 = P->Get(x2, y2, s2);
+			V3f world2 = P? P->Get(x2, y2, s2):V3f(0,0,0);
+			V3f normal2 = N? N->Get(x2, y2, s2).normalized():V3f(1,0,0);
+			float angle = acosf(normal1.dot(normal2)) * 180 / float(M_PI);
 
 			// Find the world space distance between these two samples.
 			float distance = (world2 - world1).length();
@@ -1031,16 +1056,17 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 				depth2-depth1, distance);
 			} */
 
-			// Scale depth from the depth range to 0-1.
-			float result = scale(distance,
-			     config.intersectionMinDistance*depthScale,
-			    (config.intersectionMinDistance+config.intersectionFade) * depthScale, 0.0f, 1.0f);
-
-			// Clamp to 0-1 now that we're in unit range.  It's important that
-			// we do this before applying sampleVisibility1 below, or else a very
-			// big depth value like 100 can have an overly large effect: we want
-			// to clamp to 1 then apply coverage.
-			result = min(max(result, 0.0f), 1.0f);
+			// Scale depth and normals to 0-1.
+			float result = 1;
+			if(config.intersectionsUseNormals && N)
+			    result *= scale_clamp(angle,
+				config.intersectionAngleThreshold,
+				config.intersectionAngleThreshold + config.intersectionAngleFade,
+				0.0f, 1.0f);
+			if(config.intersectionsUseDistance && P)
+			    result *= scale_clamp(distance,
+				 config.intersectionMinDistance*depthScale,
+				(config.intersectionMinDistance+config.intersectionFade) * depthScale, 0.0f, 1.0f);
 
 			// Scale by the visibility of the pixels we're testing.
 			result *= sampleVisibility1 * sampleVisibility2;
@@ -1132,6 +1158,12 @@ static V4f ParseColor(const string &str)
 EXROperation_Stroke::EXROperation_Stroke(const SharedConfig &sharedConfig_, string opt, vector<pair<string,string>> arguments):
     sharedConfig(sharedConfig_)
 {
+    // Adjust worldSpaceScale to world space units.  This only affects defaults, not what the user specifies directly.
+    strokeDesc.minPixelsPerCm *= sharedConfig.worldSpaceScale;
+    strokeDesc.intersectionMinDistance *= sharedConfig.worldSpaceScale;
+    strokeDesc.intersectionFade *= sharedConfig.worldSpaceScale;
+    strokeDesc.pushTowardsCamera *= sharedConfig.worldSpaceScale;
+
     strokeDesc.objectId = atoi(opt.c_str());
 
     for(auto it: arguments)
@@ -1161,22 +1193,34 @@ EXROperation_Stroke::EXROperation_Stroke(const SharedConfig &sharedConfig_, stri
 	    strokeDesc.intersectionMinDistance = (float) atof(value.c_str());
 	else if(arg == "intersection-fade")
 	    strokeDesc.intersectionFade = (float) atof(value.c_str());
+	else if(arg == "intersection-min-angle")
+	    strokeDesc.intersectionAngleThreshold = (float) atof(value.c_str());
+	else if(arg == "intersection-angle-fade")
+	    strokeDesc.intersectionAngleFade = (float) atof(value.c_str());
 	else if(arg == "intersection-save-mask")
 	    strokeDesc.saveIntersectionMask = sharedConfig.GetFilename(value);
+	else if(arg == "intersection-ignore-distance")
+	    strokeDesc.intersectionsUseDistance = false;
+	else if(arg == "intersection-ignore-normals")
+	    strokeDesc.intersectionsUseNormals = false;
 	else
 	    throw StringException("Unknown stroke option: " + arg);
     }
 
-    // Adjust worldSpaceScale to world space units.
-    strokeDesc.minPixelsPerCm *= sharedConfig.worldSpaceScale;
-    strokeDesc.intersectionMinDistance *= sharedConfig.worldSpaceScale;
-    strokeDesc.intersectionFade *= sharedConfig.worldSpaceScale;
+    // Make sure at least one of these is on.
+    if(!strokeDesc.intersectionsUseDistance && !strokeDesc.intersectionsUseNormals)
+	throw StringException("Intersections can't ignore both distance and normals");
 }
 
 void EXROperation_Stroke::AddChannels(shared_ptr<DeepImage> image, DeepFrameBuffer &frameBuffer) const
 {
     if(strokeDesc.strokeIntersections)
-	image->AddChannelToFramebuffer<V3f>("P", frameBuffer, false);
+    {
+	if(strokeDesc.intersectionsUseDistance)
+	    image->AddChannelToFramebuffer<V3f>("P", frameBuffer, false);
+	if(strokeDesc.intersectionsUseNormals)
+	    image->AddChannelToFramebuffer<V3f>("N", frameBuffer, false);
+    }
     if(!strokeDesc.strokeMaskChannel.empty())
 	image->AddChannelToFramebuffer<float>(strokeDesc.strokeMaskChannel, frameBuffer, true);
     if(!strokeDesc.intersectionMaskChannel.empty())

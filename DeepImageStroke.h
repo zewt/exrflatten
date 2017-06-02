@@ -37,9 +37,17 @@ namespace DeepImageStroke
 	float minPixelsPerCm = 5;
 
 	bool strokeOutline = true;
+
+	// If intersectionsUseDistance and/or intersectionsUseNormals are disabled, we'll only use
+	// the other, and we won't require the corresponding P or N input channel.  This is mostly
+	// for troubleshooting, since you can turn one off and output the mask to see what's happening.
 	bool strokeIntersections = false;
+	bool intersectionsUseDistance = true;
 	float intersectionMinDistance = 1.0f;
 	float intersectionFade = 1.0f;
+	bool intersectionsUseNormals = true;
+	float intersectionAngleThreshold = 25.0f;
+	float intersectionAngleFade = 10.0f;
 
 	string saveIntersectionMask;
     };
