@@ -55,7 +55,7 @@ namespace DeepImageUtil {
 	bool alphaMask,
 	bool compositeAlpha,
 	shared_ptr<const TypedDeepImageChannel<float>> mask,
-	shared_ptr<const TypedDeepImageChannel<Imath::V4f>> rgba,
+	shared_ptr<const DeepImageChannelProxy> alpha,
 	shared_ptr<const TypedDeepImageChannel<uint32_t>> id,
 	int objectId,
 	shared_ptr<SimpleImage> layer);

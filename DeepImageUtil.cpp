@@ -273,14 +273,14 @@ void DeepImageUtil::ExtractMask(
     bool alphaMask,
     bool compositeAlpha,
     shared_ptr<const TypedDeepImageChannel<float>> mask,
-    shared_ptr<const TypedDeepImageChannel<V4f>> rgba,
+    shared_ptr<const DeepImageChannelProxy> A,
     shared_ptr<const TypedDeepImageChannel<uint32_t>> id,
     int objectId,
     shared_ptr<SimpleImage> layer)
 {
-    for(int y = 0; y < rgba->height; y++)
+    for(int y = 0; y < A->height; y++)
     {
-	for(int x = 0; x < rgba->width; x++)
+	for(int x = 0; x < A->width; x++)
 	{
 	    float resultValue = 0;
 	    if(compositeAlpha)
@@ -288,13 +288,13 @@ void DeepImageUtil::ExtractMask(
 		// If compositeAlpha is true, blend the mask like a color value, giving us a
 		// composited mask value and its transparency: (mask, alpha).
 		V2f result(0,0);
-		for(int s = 0; s < rgba->sampleCount[y][x]; ++s)
+		for(int s = 0; s < A->sampleCount[y][x]; ++s)
 		{
 		    if(id->Get(x, y, s) != objectId)
 			continue;
 
 		    float maskValue = mask->Get(x, y, s);
-		    float alpha = rgba->Get(x,y,s)[3];
+		    float alpha = A->Get(x,y,s);
 		    result *= 1-alpha;
 		    result += V2f(maskValue*alpha, alpha);
 		}
@@ -311,12 +311,12 @@ void DeepImageUtil::ExtractMask(
 	    {
 		// If false, just find the nearest sample to the camera that isn't completely
 		// transparent.
-		for(int s = rgba->sampleCount[y][x]-1; s >= 0; --s)
+		for(int s = A->sampleCount[y][x]-1; s >= 0; --s)
 		{
 		    if(id->Get(x, y, s) != objectId)
 			continue;
 
-		    float alpha = rgba->Get(x,y,s)[3];
+		    float alpha = A->Get(x,y,s);
 		    if(alpha < 0.00001f)
 			continue;
 
