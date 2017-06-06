@@ -12,6 +12,7 @@
 #include <OpenEXR/ImfHeader.h>
 
 using namespace std;
+class DeepImageChannelProxy;
 
 // A base class for a deep image channel.  Most of the real work is in TypedDeepImageChannel.
 class DeepImageChannel
@@ -140,8 +141,35 @@ public:
 
     // The default value for this channel when adding new samples with AddSample.
     T defaultValue = T();
+};
 
-    // This is a reference to DeepImage::sampleCount, which is shared by all channels.
+// This is a read-only proxy, to allow reading a single component of a vector as if it's
+// a single channel.  This is useful for alpha channels, so code that only wants to read alpha
+// doesn't need to care whether alpha is part of an RGBA channel, greyscale LA or alpha by
+// itself.
+class DeepImageChannelProxy
+{
+public:
+    DeepImageChannelProxy(shared_ptr<const DeepImageChannel> source, int channel_):
+	channel(channel_),
+	width(source->width),
+	height(source->height),
+	sampleCount(source->sampleCount)
+    {
+    }
+
+    virtual float Get(int x, int y, int sample) const = 0;
+
+    // If sample is -1, return defaultValue.  Otherwise, return the actual sample value.
+    float GetWithDefault(int x, int y, int sample, float defaultValue) const
+    {
+	if(sample == -1)
+	    return defaultValue;
+	return Get(x, y, sample);
+    }
+
+    int channel = 0;
+    const int width, height;
     const Imf::Array2D<unsigned int> &sampleCount;
 };
 
@@ -178,6 +206,8 @@ public:
 	return const_cast<DeepImage *>(this)->GetChannel<T>(name);
     }
 
+    shared_ptr<DeepImageChannelProxy> GetAlphaChannel() const;
+    
     // Add a sample to each channel for the given pixel.
     void AddSample(int x, int y);
 

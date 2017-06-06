@@ -196,6 +196,47 @@ DeepImage::DeepImage(int width_, int height_)
     sampleCount.resizeErase(height, width);
 }
 
+namespace {
+    // This is used below to read the given channel from a vector.  If the type
+    // is just a float, the value is returned and the channel number is ignored.
+    template<typename T>
+    float GetValueForChannel(const T &vec, int channel)
+    {
+	return vec[channel];
+    }
+
+    float GetValueForChannel(float value, int channel)
+    {
+	return value;
+    }
+
+    template<typename T>
+    class DeepImageChannelProxyImpl: public DeepImageChannelProxy
+    {
+    public:
+	DeepImageChannelProxyImpl<T>(shared_ptr<const TypedDeepImageChannel<T>> source_, int channel_):
+	    source(source_),
+	    DeepImageChannelProxy(source_, channel_)
+	{
+	}
+
+	// Get a sample for for the given pixel.
+	float Get(int x, int y, int sample) const
+	{
+	    auto value = source->Get(x, y, sample);
+	    return GetValueForChannel(value, channel);
+	}
+
+	shared_ptr<const TypedDeepImageChannel<T>> source;
+    };
+}
+
+shared_ptr<DeepImageChannelProxy> DeepImage::GetAlphaChannel() const
+{
+    // Return a proxy for the alpha channel of RGBA.
+    auto rgba = GetChannel<V4f>("rgba");
+    return make_shared<DeepImageChannelProxyImpl<V4f>>(rgba, 3);
+}
 
 void DeepImage::AddSample(int x, int y)
 {
