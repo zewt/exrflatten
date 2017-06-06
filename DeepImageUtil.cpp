@@ -350,7 +350,7 @@ vector<float> DeepImageUtil::GetSampleVisibility(shared_ptr<const DeepImage> ima
 	for(float &sampleAlpha: result)
 	    sampleAlpha *= 1-alpha;
 
-	result.push_back(alpha);
+	result.push_back(1.0f);
     }
     return result;
 }

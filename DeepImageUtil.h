@@ -60,10 +60,32 @@ namespace DeepImageUtil {
 	int objectId,
 	shared_ptr<SimpleImage> layer);
 
-    // Return the final visibility of each sample at the given pixel.
+    // Return the visibility of each sample at the given pixel.
     //
-    // If a sample has three pixels with alpha 1.0, 0.5 and 0.5, the first sample is covered by the
-    // samples on top of it, and the final visibility is { 0.25, 0.25, 0.5 }.
+    // Each value in the result is the visibility of that sample.  For example, if RGBA
+    // samples are:
+    //
+    //         R    G    B    A 
+    // s[0] =  1    1    1    1.0
+    // s[1] =  0.25 0.25 0.25 0.25
+    //
+    // then 25% of s[0] is covered by s[1], and s[1] isn't covered by anything, so the
+    // result is [0.75, 1.0].  Each sample can be multiplied by its visibility to get
+    // the final contribution:
+    // 
+    // s[0] * 0.75 = [0.75, 0.75, 0.75, 0.75]
+    // s[1] * 1.0  = [0.25, 0.25, 0.25, 0.25]
+    //
+    // These are the final values that would be added together during normal composition.
+    // This allows getting the actual contribution of each sample by itself.
+    //
+    // This works for additive samples.  For example:
+    //
+    // s[0] =  1    1    1    0
+    // s[1] =  0.25 0.25 0.25 0.25
+    //
+    // Here, s[0] has zero alpha, so it adds 1.  The visibility values are the same as
+    // above, [0.75, 1.0].
     vector<float> GetSampleVisibility(shared_ptr<const DeepImage> image, int x, int y);
     void GetSampleVisibilities(shared_ptr<const DeepImage> image, Imf::Array2D<vector<float>> &SampleVisibilities);
 
