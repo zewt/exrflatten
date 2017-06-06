@@ -1138,7 +1138,9 @@ void EXROperation_Stroke::AddStroke(const DeepImageStroke::Config &config, share
     // Flatten the image.  We'll use this as the mask to create the stroke.  Don't
     // actually apply the stroke until we deal with intersections, so we don't apply
     // intersection strokes to other strokes.
-    shared_ptr<SimpleImage> strokeMask = DeepImageUtil::CollapseEXR(image, strokeVisibilityMask, { config.objectId });
+    shared_ptr<SimpleImage> strokeMask;
+    if(config.strokeOutline)
+	strokeMask = DeepImageUtil::CollapseEXR(image, strokeVisibilityMask, { config.objectId });
 
     // Create the intersection mask.  It's important that we do this before applying the stroke.
     shared_ptr<SimpleImage> intersectionMask;
