@@ -936,12 +936,7 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
     }
 
     Array2D<vector<float>> SampleVisibilities;
-    SampleVisibilities.resizeErase(image->height, image->width);
-    for(int y = 0; y < image->height; y++)
-    {
-	for(int x = 0; x < image->width; x++)
-	    SampleVisibilities[y][x] = DeepImageUtil::GetSampleVisibility(image, x, y);
-    }
+    DeepImageUtil::GetSampleVisibilities(image, SampleVisibilities);
 
     // The number of pixels per 1cm, at a distance of 1cm from the camera.
     float pixelsPerCm = CalculateDepthScale(config, image);

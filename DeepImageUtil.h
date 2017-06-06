@@ -65,6 +65,7 @@ namespace DeepImageUtil {
     // If a sample has three pixels with alpha 1.0, 0.5 and 0.5, the first sample is covered by the
     // samples on top of it, and the final visibility is { 0.25, 0.25, 0.5 }.
     vector<float> GetSampleVisibility(shared_ptr<const DeepImage> image, int x, int y);
+    void GetSampleVisibilities(shared_ptr<const DeepImage> image, Imf::Array2D<vector<float>> &SampleVisibilities);
 
     // Copy all samples from all channels of images into a single image.
     shared_ptr<DeepImage> CombineImages(vector<shared_ptr<DeepImage>> images);

@@ -355,6 +355,16 @@ vector<float> DeepImageUtil::GetSampleVisibility(shared_ptr<const DeepImage> ima
     return result;
 }
 
+void DeepImageUtil::GetSampleVisibilities(shared_ptr<const DeepImage> image, Array2D<vector<float>> &SampleVisibilities)
+{
+    SampleVisibilities.resizeErase(image->height, image->width);
+    for(int y = 0; y < image->height; y++)
+    {
+	for(int x = 0; x < image->width; x++)
+	    SampleVisibilities[y][x] = DeepImageUtil::GetSampleVisibility(image, x, y);
+    }
+}
+
 namespace {
     void SumSampleCounts(Array2D<unsigned int> &totalSampleCount, const vector<shared_ptr<DeepImage>> &images)
     {
