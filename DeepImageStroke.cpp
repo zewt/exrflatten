@@ -269,7 +269,7 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
     // Create a mask using simple edge detection.
     auto id = image->GetChannel<uint32_t>("id");
     auto Z = image->GetChannel<float>("Z");
-    auto rgba = image->GetChannel<V4f>("rgba");
+    auto A = image->GetAlphaChannel();
 
     // P and/or N will be NULL if intersectionsUseDistance or intersectionsUseNormals are false.
     auto P = image->GetChannel<V3f>("P");
@@ -341,7 +341,7 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 			continue;
 
 		    // Skip this sample if it's completely occluded.
-		    float sampleVisibility1 = SampleVisibilities[y][x][s1] * rgba->Get(x,y,s1)[3];
+		    float sampleVisibility1 = SampleVisibilities[y][x][s1] * A->Get(x,y,s1);
 		    if(sampleVisibility1 < 0.001f)
 			continue;
 
@@ -385,7 +385,7 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 			    continue;
 
 			// Skip this sample if it's completely occluded.
-			float sampleVisibility2 = SampleVisibilities[y2][x2][s2] * rgba->Get(x2,y2,s2)[3];
+			float sampleVisibility2 = SampleVisibilities[y2][x2][s2] * A->Get(x2,y2,s2);
 			if(sampleVisibility2 < 0.001f)
 			    continue;
 
