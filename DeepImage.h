@@ -43,7 +43,7 @@ public:
     // color channels, but Arnold does it with world space positions and other data.  If this is
     // true, this is a channel that we need to divide by alpha to work around this problem.
     bool needsAlphaDivide = false;
-    virtual void UnpremultiplyChannel(shared_ptr<const DeepImageChannel> rgba) = 0;
+    virtual void UnpremultiplyChannel(shared_ptr<DeepImageChannelProxy> alpha) = 0;
 
     int width, height;
 
@@ -133,8 +133,8 @@ public:
     // samples allocated to hold the copied samples.
     void CopySamples(shared_ptr<const DeepImageChannel> OtherChannel, int x, int y, int firstIdx);
 
-    // Unpremultiply this channel.
-    void UnpremultiplyChannel(shared_ptr<const DeepImageChannel> rgba);
+    // Unpremultiply this channel.  The alpha parameter is deepImage->GetAlphaChannel().
+    void UnpremultiplyChannel(shared_ptr<DeepImageChannelProxy> alpha);
 
     Imf::Array2D<T *> data;
     vector<shared_ptr<Imf::Array2D<T *>>> readPointers;

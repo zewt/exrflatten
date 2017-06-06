@@ -202,12 +202,12 @@ void Config::Run() const
 	// Note that this doesn't include P, which is handled by EXROperation_FixArnold.
 	if(image->header.findTypedAttribute<StringAttribute>("arnold/version") != NULL)
 	{
-	    auto rgba = image->GetChannel<V4f>("rgba");
+	    auto A = image->GetAlphaChannel();
 	    for(auto it: image->channels)
 	    {
 		shared_ptr<DeepImageChannel> channel = it.second;
 		if(channel->needsAlphaDivide)
-		    channel->UnpremultiplyChannel(rgba);
+		    channel->UnpremultiplyChannel(A);
 	    }
 	}
     }

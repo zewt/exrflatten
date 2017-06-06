@@ -170,18 +170,16 @@ void TypedDeepImageChannel<T>::AddToFramebuffer(string name, const Header &heade
 }
 
 template<typename T>
-void TypedDeepImageChannel<T>::UnpremultiplyChannel(shared_ptr<const DeepImageChannel> rgba_)
+void TypedDeepImageChannel<T>::UnpremultiplyChannel(shared_ptr<DeepImageChannelProxy> A)
 {
-    auto  rgba = dynamic_pointer_cast<const TypedDeepImageChannel<Imath::V4f>>(rgba_);
     for(int y = 0; y < height; y++)
     {
 	for(int x = 0; x < width; x++)
 	{
-	    const V4f *rgbaSamples = rgba->GetSamples(x, y);
 	    T *channelSamples = GetSamples(x, y);
 	    for(int s = 0; s < sampleCount[y][x]; ++s)
 	    {
-		float a = rgbaSamples[s][3];
+		float a = A->Get(x,y,s);
 		if(a > 0.00001f)
 		    channelSamples[s] = T(channelSamples[s] / a);
 	    }

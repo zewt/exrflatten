@@ -53,7 +53,7 @@ void EXROperation_FixArnold::Run(shared_ptr<EXROperationState> state) const
 	return screenSpace;
     };
 
-    auto rgba = image->GetChannel<V4f>("rgba");
+    auto A = image->GetAlphaChannel();
 
     float errorCountDirect = 0;
     float errorCountUnpremultiplied = 0;
@@ -63,7 +63,7 @@ void EXROperation_FixArnold::Run(shared_ptr<EXROperationState> state) const
 	{
 	    for(int s = 0; s < image->NumSamples(x,y); ++s)
 	    {
-		float alpha = rgba->Get(x,y,s)[3];
+		float alpha = A->Get(x,y,s);
 		V3f world = P->Get(x,y,s);
 		V3f worldUnpremultiplied = world / alpha;
 		    
@@ -106,5 +106,5 @@ void EXROperation_FixArnold::Run(shared_ptr<EXROperationState> state) const
     }
 
     // Unpremultiply P.
-    P->UnpremultiplyChannel(rgba);
+    P->UnpremultiplyChannel(image->GetAlphaChannel());
 }
