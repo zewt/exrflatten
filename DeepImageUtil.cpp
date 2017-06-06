@@ -202,12 +202,9 @@ void DeepImageUtil::SeparateLayer(
     {
 	for(int x = 0; x < image->width; x++)
 	{
-	    auto rgba = image->GetChannel<V4f>("rgba");
-
 	    V4f color(0,0,0,0);
 	    for(int s = 0; s < image->NumSamples(x, y); ++s)
 	    {
-
 		// The layers we're creating are in a fixed order specified by the user, but
 		// the samples can be in any order.  We have samples that are supposed to be
 		// behind others, but which will actually be in the top layer.
@@ -340,11 +337,11 @@ vector<float> DeepImageUtil::GetSampleVisibility(shared_ptr<const DeepImage> ima
 {
     vector<float> result;
 
-    auto rgba = image->GetChannel<V4f>("rgba");
+    auto A = image->GetAlphaChannel();
 
     for(int s = 0; s < image->sampleCount[y][x]; ++s)
     {
-	float alpha = rgba->Get(x, y, s)[3];
+	float alpha = A->Get(x, y, s);
 
 	// Apply the alpha term to each sample underneath this one.
 	for(float &sampleAlpha: result)
