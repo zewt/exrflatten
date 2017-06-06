@@ -52,16 +52,6 @@ namespace DeepImageStroke
 	string saveIntersectionMask;
     };
 
-    // Calculate euclidean distance from each pixel to the nearest pixel where GetMask returns 0.
-    struct DistanceResult {
-	int sx, sy;
-	float distance;
-    };
-
-    shared_ptr<Imf::Array2D<DistanceResult>> CalculateDistance(
-	int width, int height,
-	const Imf::Array2D<float> &mask);
-
     // Return the alpha value to draw a stroke, given the distance to the nearest pixel in
     // the shape and the radius of the stroke.
     float DistanceAndRadiusToAlpha(float distance, const Config &config);

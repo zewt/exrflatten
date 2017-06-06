@@ -12,6 +12,7 @@
     <ClCompile Include="EXROperation_WriteLayers.cpp" />
     <ClCompile Include="EXROperation.cpp" />
     <ClCompile Include="EXROperation_FixArnold.cpp" />
+    <ClCompile Include="EuclideanDistance.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="exrsamples.h" />
@@ -24,5 +25,6 @@
     <ClInclude Include="EXROperation.h" />
     <ClInclude Include="EXROperation_WriteLayers.h" />
     <ClInclude Include="EXROperation_FixArnold.h" />
+    <ClInclude Include="EuclideanDistance.h" />
   </ItemGroup>
 </Project>

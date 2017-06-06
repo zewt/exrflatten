@@ -97,6 +97,7 @@
     <ClCompile Include="DeepImage.cpp" />
     <ClCompile Include="DeepImageMasks.cpp" />
     <ClCompile Include="DeepImageUtil.cpp" />
+    <ClCompile Include="EuclideanDistance.cpp" />
     <ClCompile Include="exrflatten.cpp" />
     <ClCompile Include="EXROperation.cpp" />
     <ClCompile Include="EXROperation_FixArnold.cpp" />
@@ -110,6 +111,7 @@
     <ClInclude Include="DeepImage.h" />
     <ClInclude Include="DeepImageMasks.h" />
     <ClInclude Include="DeepImageUtil.h" />
+    <ClInclude Include="EuclideanDistance.h" />
     <ClInclude Include="EXROperation.h" />
     <ClInclude Include="EXROperation_FixArnold.h" />
     <ClInclude Include="EXROperation_WriteLayers.h" />
