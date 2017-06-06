@@ -17,6 +17,8 @@ using namespace std;
 class DeepImageChannel
 {
 public:
+    DeepImageChannel(int width, int height, const Imf::Array2D<unsigned int> &sampleCount);
+
     virtual ~DeepImageChannel()
     {
     }
@@ -41,6 +43,11 @@ public:
     // true, this is a channel that we need to divide by alpha to work around this problem.
     bool needsAlphaDivide = false;
     virtual void UnpremultiplyChannel(shared_ptr<const DeepImageChannel> rgba) = 0;
+
+    int width, height;
+
+    // This is a reference to DeepImage::sampleCount, which is shared by all channels.
+    const Imf::Array2D<unsigned int> &sampleCount;
 };
 
 template<typename T>
@@ -128,7 +135,6 @@ public:
     // Unpremultiply this channel.
     void UnpremultiplyChannel(shared_ptr<const DeepImageChannel> rgba);
 
-    int width, height;
     Imf::Array2D<T *> data;
     vector<shared_ptr<Imf::Array2D<T *>>> readPointers;
 
@@ -143,7 +149,6 @@ extern template class TypedDeepImageChannel<uint32_t>;
 extern template class TypedDeepImageChannel<float>;  
 extern template class TypedDeepImageChannel<Imath::V3f>;  
 extern template class TypedDeepImageChannel<Imath::V4f>;  
-
 
 class DeepImage
 {

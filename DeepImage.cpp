@@ -33,10 +33,15 @@ template<> int GetEXRElementSize<V3f>() { return sizeof(float); }
 template<> int GetEXRElementSize<V4f>() { return sizeof(float); }
 template<> int GetEXRElementSize<uint32_t>() { return sizeof(uint32_t); }
 
-template<typename T>
-TypedDeepImageChannel<T>::TypedDeepImageChannel(int width_, int height_, const Array2D<unsigned int> &sampleCount_):
+DeepImageChannel::DeepImageChannel(int width_, int height_, const Array2D<unsigned int> &sampleCount_):
     width(width_), height(height_),
     sampleCount(sampleCount_)
+{
+}
+
+template<typename T>
+TypedDeepImageChannel<T>::TypedDeepImageChannel(int width_, int height_, const Array2D<unsigned int> &sampleCount_):
+    DeepImageChannel(width_, height_, sampleCount_)
 {
     defaultValue = T();
     data.resizeErase(height, width);
@@ -44,9 +49,7 @@ TypedDeepImageChannel<T>::TypedDeepImageChannel(int width_, int height_, const A
     for(int y = 0; y < data.height(); y++)
     {
 	for(int x = 0; x < data.width(); x++)
-	{
 	    data[y][x] = new T[sampleCount[y][x]];
-	}
     }
 }
 
