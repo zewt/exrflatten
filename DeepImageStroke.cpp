@@ -593,10 +593,11 @@ static void edtaa3(
     while(changed); // Sweep until no more updates are made
 }
 
-void DeepImageStroke::CalculateDistance(int width, int height,
-        function<float(int x, int y)> GetMask,
-	function<void(int x, int y, int sx, int sy, float distance)> PutResult)
+shared_ptr<Array2D<DeepImageStroke::DistanceResult>> DeepImageStroke::CalculateDistance(int width, int height,
+        function<float(int x, int y)> GetMask)
 {
+    shared_ptr<Array2D<DistanceResult>> result = make_shared<Array2D<DistanceResult>>(height, width);
+
     vector<float> gx(height*width), gy(height*width);
     computegradient(GetMask, width, height, gx.data(), gy.data());
     
@@ -616,9 +617,14 @@ void DeepImageStroke::CalculateDistance(int width, int height,
 	    int srcX = x - xdist[i];
 	    int srcY = y - ydist[i];
 
-	    PutResult(x, y, srcX, srcY, distance);
+	    auto &r = (*result)[y][x];
+	    r.sx = srcX;
+	    r.sy = srcY;
+	    r.distance = distance;
 	}
     }
+
+    return result;
 }
 
 #if 0
@@ -733,31 +739,20 @@ void DeepImageStroke::ApplyStrokeUsingMask(const DeepImageStroke::Config &config
 
     // Calculate a stroke for the flattened image, and insert the stroke as deep samples, so
     // it'll get composited at the correct depth, allowing it to be obscured.
-    struct result {
-	int sx, sy;
-	float distance;
-    };
-    Array2D<result> EuclideanDistance(image->height, image->width);
-
-    CalculateDistance(mask->width, mask->height,
+    shared_ptr<Array2D<DistanceResult>> EuclideanDistance = CalculateDistance(mask->width, mask->height,
     [&](int x, int y) {
 	float alpha = mask->GetRGBA(x, y)[3];
 	alpha = ::clamp(alpha, 0.0f, 1.0f);
 	return alpha;
-    }, [&](int x, int y, int sx, int sy, float distance) {
-	auto &r = EuclideanDistance[y][x];
-	r.sx = sx;
-	r.sy = sy;
-	r.distance = distance;
     });
 
     for(int y = 0; y < mask->height; ++y)
     {
 	for(int x = 0; x < mask->width; ++x)
 	{
-	    float distance = EuclideanDistance[y][x].distance;
-	    int sx = EuclideanDistance[y][x].sx;
-	    int sy = EuclideanDistance[y][x].sy;
+	    float distance = (*EuclideanDistance)[y][x].distance;
+	    int sx = (*EuclideanDistance)[y][x].sx;
+	    int sy = (*EuclideanDistance)[y][x].sy;
 
 	    float alpha = DistanceAndRadiusToAlpha(distance + 0.5f, config);
 	    //if(x == TEST_X && y == TEST_Y)
