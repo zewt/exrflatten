@@ -192,6 +192,9 @@ DeepImage::DeepImage(int width_, int height_)
     width = width_;
     height = height_;
     sampleCount.resizeErase(height, width);
+
+    // resizeErase does not erase.
+    memset(&sampleCount[0][0], 0, sizeof(sampleCount[0][0]) * width * height);
 }
 
 namespace {

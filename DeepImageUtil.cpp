@@ -396,6 +396,7 @@ shared_ptr<DeepImage> DeepImageUtil::CombineImages(vector<shared_ptr<DeepImage>>
 
 	Array2D<unsigned int> sampleCountSoFar;
 	sampleCountSoFar.resizeErase(result->height, result->width);
+	memset(&sampleCountSoFar[0][0], 0, sizeof(sampleCountSoFar[0][0]) * result->height * result->width);
 
 #if 1
 	// Copy samples from each input image.  This is optimized by getting a raw pointer to
