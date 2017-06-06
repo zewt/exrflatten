@@ -49,14 +49,14 @@ namespace DeepImageStroke
 	float intersectionAngleThreshold = 25.0f;
 	float intersectionAngleFade = 10.0f;
 
-	string saveIntersectionMask;
+	string saveIntersectionPattern;
     };
 
     // Return the alpha value to draw a stroke, given the distance to the nearest pixel in
     // the shape and the radius of the stroke.
     float DistanceAndRadiusToAlpha(float distance, const Config &config);
 
-    shared_ptr<SimpleImage> CreateIntersectionMask(const DeepImageStroke::Config &config,
+    shared_ptr<SimpleImage> CreateIntersectionPattern(const DeepImageStroke::Config &config,
 	shared_ptr<const DeepImage> image, shared_ptr<const TypedDeepImageChannel<float>> imageMask);
     void ApplyStrokeUsingMask(const DeepImageStroke::Config &config,
 	shared_ptr<const DeepImage> image, shared_ptr<DeepImage> outputImage,

@@ -252,7 +252,7 @@ static float CalculateDepthScale(const DeepImageStroke::Config &config, shared_p
     return screenSpaceDistance[0];
 }
 
-// Create an intersection mask that can be used to create a stroke.  This generates a mask
+// Create an intersection pattern that can be used to create a stroke.  This generates a mask
 // which is set for pixels that neighbor pixels further away.  What we're really looking
 // for is mesh discontinuities: neighboring pixels which are from two different places
 // and not a continuous object.
@@ -261,10 +261,11 @@ static float CalculateDepthScale(const DeepImageStroke::Config &config, shared_p
 //
 // Note that to make comments easier to follow, this pretends world space units are in cm,
 // like Maya.  "1cm" really just means one world space unit.
-shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageStroke::Config &config,
-    shared_ptr<const DeepImage> image, shared_ptr<const TypedDeepImageChannel<float>> imageMask)
+shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionPattern(const DeepImageStroke::Config &config,
+    shared_ptr<const DeepImage> image,
+    shared_ptr<const TypedDeepImageChannel<float>> imageMask)
 {
-    shared_ptr<SimpleImage> mask = make_shared<SimpleImage>(image->width, image->height);
+    shared_ptr<SimpleImage> pattern = make_shared<SimpleImage>(image->width, image->height);
 
     // Create a mask using simple edge detection.
     auto id = image->GetChannel<uint32_t>("id");
@@ -443,11 +444,11 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 		maxDistance = max(maxDistance, totalDifference);
 	    }
 
-	    mask->GetRGBA(x,y) = V4f(1,1,1,1) * maxDistance;
+	    pattern->GetRGBA(x,y) = V4f(1,1,1,1) * maxDistance;
 	}
     }
 
-    return mask;
+    return pattern;
 }
 
 void EXROperation_Stroke::Run(shared_ptr<EXROperationState> state) const
@@ -477,21 +478,21 @@ void EXROperation_Stroke::AddStroke(const DeepImageStroke::Config &config, share
 	strokeMask = DeepImageUtil::CollapseEXR(image, strokeVisibilityMask, config.objectIds);
 
     // Create the intersection mask.  It's important that we do this before applying the stroke.
-    shared_ptr<SimpleImage> intersectionMask;
+    shared_ptr<SimpleImage> intersectionPattern;
     if(config.strokeIntersections)
     {
-	intersectionMask = CreateIntersectionMask(config, image, intersectionVisibilityMask);
+	intersectionPattern = CreateIntersectionPattern(config, image, intersectionVisibilityMask);
 
 	// This is just for diagnostics.
-	if(intersectionMask && !config.saveIntersectionMask.empty())
-	    intersectionMask->WriteEXR(config.saveIntersectionMask);
+	if(intersectionPattern && !config.saveIntersectionPattern.empty())
+	    intersectionPattern->WriteEXR(config.saveIntersectionPattern);
     }
 
     // Apply the regular stroke and the intersection stroke.
     if(config.strokeOutline)
 	ApplyStrokeUsingMask(config, image, outputImage, strokeMask);
-    if(config.strokeIntersections && intersectionMask)
-	ApplyStrokeUsingMask(config, image, outputImage, intersectionMask);
+    if(config.strokeIntersections && intersectionPattern)
+	ApplyStrokeUsingMask(config, image, outputImage, intersectionPattern);
 
     // Make sure the output image is sorted.
     DeepImageUtil::SortSamplesByDepth(outputImage);
@@ -561,8 +562,8 @@ EXROperation_Stroke::EXROperation_Stroke(const SharedConfig &sharedConfig_, stri
 	    strokeDesc.intersectionAngleThreshold = (float) atof(value.c_str());
 	else if(arg == "intersection-angle-fade")
 	    strokeDesc.intersectionAngleFade = (float) atof(value.c_str());
-	else if(arg == "intersection-save-mask")
-	    strokeDesc.saveIntersectionMask = sharedConfig.GetFilename(value);
+	else if(arg == "intersection-save-pattern")
+	    strokeDesc.saveIntersectionPattern = sharedConfig.GetFilename(value);
 	else if(arg == "intersection-ignore-distance")
 	    strokeDesc.intersectionsUseDistance = false;
 	else if(arg == "intersection-ignore-normals")
