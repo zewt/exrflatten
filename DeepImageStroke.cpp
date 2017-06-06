@@ -61,7 +61,7 @@ using namespace Imath;
  * The gradient is computed only at edge pixels. At other places in the
  * image, it is never used, and it's mostly zero anyway.
  */
-static void computegradient(function<float(int x, int y)> GetMask,
+static void computegradient(const Array2D<float> &mask,
            int w, int h, float *gx, float *gy)
 {
     int i,j,k;
@@ -70,25 +70,25 @@ static void computegradient(function<float(int x, int y)> GetMask,
     for(j = 1; j < h-1; j++) {
 	for(i = 1; i < w-1; i++) { // Avoid edges where the kernels would spill over
             k = j*w + i;
-            if((GetMask(i,j)>0.0) && (GetMask(i,j)<1.0)) { // Compute gradient for edge pixels only
+            if((mask[j][i] > 0.0) && (mask[j][i]<1.0)) { // Compute gradient for edge pixels only
                 gx[k] =
-                    - GetMask(i-1,j-1)
+                    - mask[j-1][i-1]
                     - SQRT2*
-                      GetMask(i-1,j)
-                    - GetMask(i-1,j+1)
-                    + GetMask(i+1,j-1)
+                      mask[j][i-1]
+                    - mask[j+1][i-1]
+                    + mask[j-1][i+1]
                     + SQRT2*
-                      GetMask(i+1,j)
-                    + GetMask(i+1,j+1);
+                      mask[j][i+1]
+                    + mask[j+1][i+1];
                 gy[k] =
-                    - GetMask(i-1,j-1)
+                    - mask[j-1][i-1]
                     - SQRT2*
-                      GetMask(i,j-1)
-                    - GetMask(i+1,j-1)
-                    + GetMask(i-1,j+1)
+                      mask[j-1][i]
+                    - mask[j-1][i+1]
+                    + mask[j+1][i-1]
                     + SQRT2*
-                      GetMask(i,j+1)
-                    + GetMask(i+1,j+1);
+                      mask[j+1][i]
+                    + mask[j+1][i+1];
                 glength = gx[k]*gx[k] + gy[k]*gy[k];
                 if(glength > 0.0) { // Avoid division by zero
                     glength = sqrt(glength);
@@ -143,7 +143,7 @@ static float edgedf(float gx, float gy, float a)
 }
 
 static float distaa3(
-	const function<float(int x, int y)> &GetMask,
+	const Array2D<float> &mask,
         const float *gximg, const float *gyimg, int w, int c, int xc, int yc, int xi, int yi)
 {
   float di, df, dx, dy, gx, gy, a;
@@ -152,7 +152,7 @@ static float distaa3(
 
   int closestX = closest % w; // Index to the edge pixel pointed to from c
   int closestY = closest / w; // Index to the edge pixel pointed to from c
-  a = GetMask(closestX, closestY);    // Grayscale value at the edge pixel
+  a = mask[closestY][closestX];    // Grayscale value at the edge pixel
   gx = gximg[closest]; // X gradient component at the edge pixel
   gy = gyimg[closest]; // Y gradient component at the edge pixel
   
@@ -174,10 +174,10 @@ static float distaa3(
 }
 
 // Shorthand macro: add ubiquitous parameters dist, gx, gy, img and w and call distaa3()
-#define DISTAA(c,xc,yc,xi,yi) (distaa3(GetMask, gx, gy, w, c, xc, yc, xi, yi))
+#define DISTAA(c,xc,yc,xi,yi) (distaa3(mask, gx, gy, w, c, xc, yc, xi, yi))
 
 static void edtaa3(
-    function<float(int x, int y)> GetMask,
+    const Array2D<float> &mask,
     const float *gx, const float *gy, int w, int h, short *distx, short *disty, float *dist)
 {
     int x, y, i, c;
@@ -204,7 +204,7 @@ static void edtaa3(
             i = y*w + x;
             distx[i] = 0; // At first, all pixels point to
             disty[i] = 0; // themselves as the closest known.
-            float value = GetMask(x,y);
+            float value = mask[y][x];
             if(value <= 0.0)
             {
                 dist[i]= 1000000.0; // Big value, means "not set yet"
@@ -594,17 +594,17 @@ static void edtaa3(
 }
 
 shared_ptr<Array2D<DeepImageStroke::DistanceResult>> DeepImageStroke::CalculateDistance(int width, int height,
-        function<float(int x, int y)> GetMask)
+    const Array2D<float> &mask)
 {
     shared_ptr<Array2D<DistanceResult>> result = make_shared<Array2D<DistanceResult>>(height, width);
 
     vector<float> gx(height*width), gy(height*width);
-    computegradient(GetMask, width, height, gx.data(), gy.data());
+    computegradient(mask, width, height, gx.data(), gy.data());
     
     vector<float> Dout(width*height);
     vector<short> xdist(height*width); // local data
     vector<short> ydist(height*width);
-    edtaa3(GetMask, gx.data(), gy.data(), width, height, xdist.data(), ydist.data(), Dout.data());
+    edtaa3(mask, gx.data(), gy.data(), width, height, xdist.data(), ydist.data(), Dout.data());
 
     for(int y=0; y<height; y++)
     {
@@ -739,12 +739,22 @@ void DeepImageStroke::ApplyStrokeUsingMask(const DeepImageStroke::Config &config
 
     // Calculate a stroke for the flattened image, and insert the stroke as deep samples, so
     // it'll get composited at the correct depth, allowing it to be obscured.
-    shared_ptr<Array2D<DistanceResult>> EuclideanDistance = CalculateDistance(mask->width, mask->height,
-    [&](int x, int y) {
-	float alpha = mask->GetRGBA(x, y)[3];
-	alpha = ::clamp(alpha, 0.0f, 1.0f);
-	return alpha;
-    });
+    Array2D<float> greyscale(mask->height, mask->width);
+    for(int y = 0; y < mask->height; ++y)
+    {
+	for(int x = 0; x < mask->width; ++x)
+	{
+	    float alpha = mask->GetRGBA(x, y)[3];
+	    alpha = ::clamp(alpha, 0.0f, 1.0f);
+	    if(alpha < 0.001f)
+		alpha = 0;
+	    if(alpha >= 0.999f)
+		alpha = 1;
+	    greyscale[y][x] = alpha;
+	}
+    }
+
+    shared_ptr<Array2D<DistanceResult>> EuclideanDistance = CalculateDistance(mask->width, mask->height, greyscale);
 
     for(int y = 0; y < mask->height; ++y)
     {
