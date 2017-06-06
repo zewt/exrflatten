@@ -492,6 +492,9 @@ void EXROperation_Stroke::AddStroke(const DeepImageStroke::Config &config, share
 	ApplyStrokeUsingMask(config, image, outputImage, strokeMask);
     if(config.strokeIntersections && intersectionMask)
 	ApplyStrokeUsingMask(config, image, outputImage, intersectionMask);
+
+    // Make sure the output image is sorted.
+    DeepImageUtil::SortSamplesByDepth(outputImage);
 }
 
 static V4f ParseColor(const string &str)
