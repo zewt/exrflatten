@@ -733,108 +733,130 @@ void DeepImageStroke::ApplyStrokeUsingMask(const DeepImageStroke::Config &config
 
     // Calculate a stroke for the flattened image, and insert the stroke as deep samples, so
     // it'll get composited at the correct depth, allowing it to be obscured.
+    struct result {
+	int sx, sy;
+	float distance;
+    };
+    Array2D<result> EuclideanDistance(image->height, image->width);
+
     CalculateDistance(mask->width, mask->height,
     [&](int x, int y) {
 	float alpha = mask->GetRGBA(x, y)[3];
 	alpha = ::clamp(alpha, 0.0f, 1.0f);
 	return alpha;
     }, [&](int x, int y, int sx, int sy, float distance) {
-	float alpha = DistanceAndRadiusToAlpha(distance + 0.5f, config);
-	//if(x == TEST_X && y == TEST_Y)
-	//    printf("-> distance %.13f, alpha %.13f, source %ix%i\n", distance, alpha, sx, sy);
+	auto &r = EuclideanDistance[y][x];
+	r.sx = sx;
+	r.sy = sy;
+	r.distance = distance;
+    });
+
+    for(int y = 0; y < mask->height; ++y)
+    {
+	for(int x = 0; x < mask->width; ++x)
+	{
+	    float distance = EuclideanDistance[y][x].distance;
+	    int sx = EuclideanDistance[y][x].sx;
+	    int sy = EuclideanDistance[y][x].sy;
+
+	    float alpha = DistanceAndRadiusToAlpha(distance + 0.5f, config);
+	    //if(x == TEST_X && y == TEST_Y)
+	    //    printf("-> distance %.13f, alpha %.13f, source %ix%i\n", distance, alpha, sx, sy);
 #if 0
-	image->AddSample(x, y);
-	rgba->GetLast(x,y) = V4f(distance, distance, distance, 1);
-	Z->GetLast(x,y) = 1;
-	ZBack->GetLast(x,y) = 1;
-	id->GetLast(x,y) = config.outputObjectId != -1? config.outputObjectId:config.objectId;
-	return;
+	    image->AddSample(x, y);
+	    rgba->GetLast(x,y) = V4f(distance, distance, distance, 1);
+	    Z->GetLast(x,y) = 1;
+	    ZBack->GetLast(x,y) = 1;
+	    id->GetLast(x,y) = config.outputObjectId != -1? config.outputObjectId:config.objectId;
+	    continue;
 #endif
 
-	// Don't add an empty sample.
-	if(alpha <= 0.00001f)
-	    return;
-
-	// sx/sy might be out of bounds.  This normally only happens if the layer is completely
-	// empty and alpha will be 0 so we won't get here, but check to be safe.
-	if(sx < 0 || sy < 0 || sx >= NearestSample.width() || sy >= NearestSample.height())
-	    return;
-
-	// SourceSample is the nearest visible pixel to this stroke, which we treat as the
-	// "source" of the stroke.  StrokeSample is the sample underneath the stroke itself,
-	// if any.
-	int SourceSample = NearestSample[sy][sx];
-	int StrokeSample = NearestSample[y][x];
-
-	// For samples that lie outside the mask, StrokeSample.zNear won't be set, and we'll
-	// use the Z distance from the source sample.  For samples that lie within the mask,
-	// eg. because there's antialiasing, use whichever is nearer, the sample under the stroke
-	// or the sample the stroke came from.  In this case, the sample under the stroke might
-	// be closer to the camera than the source sample, so if we don't do this the stroke will
-	// end up being behind the shape.
-	//
-	// Note that either of these may not actually have a sample, in which case the index will
-	// be -1 and we'll use the default.
-	float SourceSampleDistance = Z->GetWithDefault(sx, sy, SourceSample, 10000000);
-	float StrokeSampleDistance = Z->GetWithDefault(x, y, StrokeSample, 10000000);
-	float zDistance = min(SourceSampleDistance, StrokeSampleDistance);
-
-	// Bias the distance closer to the camera.  We need to subtract at least a small amount to
-	// make sure the stroke is on top of the source shape.  Subtracting more helps avoid aliasing
-	// where two stroked objects are overlapping, but too much will cause strokes to be on top
-	// of objects they shouldn't.
-	zDistance -= config.pushTowardsCamera;
-	// zDistance = 0;
-
-	/*
-	 * An outer stroke is logically blended underneath the shape, and only antialiased on
-	 * the outer edge of the stroke.  The inner edge where the stroke meets the shape isn't
-	 * antialiased.  Instead, the antialiasing of the shape on top of it is what gives the
-	 * smooth blending from the stroke to the shape.  For intersection lines, the stroke
-	 * is between the source sample and samples below it.
-	 *
-	 * However, we want to put the stroke over the shape, not underneath it, so it can go over
-	 * other stroked objects.  Deal with this by mixing the existing color over the stroke color.
-	 */
-	V4f topColor(0,0,0,0);
-	for(int s = 0; s < image->NumSamples(x, y); ++s)
-	{
-	    float depth = Z->Get(x,y,s);
-	    if(depth > SourceSampleDistance + 0.0001f + config.pushTowardsCamera)
+	    // Don't add an empty sample.
+	    if(alpha <= 0.00001f)
 		continue;
 
-	    V4f c = rgba->Get(x,y,s);
-	    topColor = topColor*(1-c[3]);
+	    // sx/sy might be out of bounds.  This normally only happens if the layer is completely
+	    // empty and alpha will be 0 so we won't get here, but check to be safe.
+	    if(sx < 0 || sy < 0 || sx >= NearestSample.width() || sy >= NearestSample.height())
+		continue;
 
-	    if(id->Get(x,y,s) == config.objectId || id->Get(x,y,s) == config.outputObjectId)
-		topColor += c;
+	    // SourceSample is the nearest visible pixel to this stroke, which we treat as the
+	    // "source" of the stroke.  StrokeSample is the sample underneath the stroke itself,
+	    // if any.
+	    int SourceSample = NearestSample[sy][sx];
+	    int StrokeSample = NearestSample[y][x];
+
+	    // For samples that lie outside the mask, StrokeSample.zNear won't be set, and we'll
+	    // use the Z distance from the source sample.  For samples that lie within the mask,
+	    // eg. because there's antialiasing, use whichever is nearer, the sample under the stroke
+	    // or the sample the stroke came from.  In this case, the sample under the stroke might
+	    // be closer to the camera than the source sample, so if we don't do this the stroke will
+	    // end up being behind the shape.
+	    //
+	    // Note that either of these may not actually have a sample, in which case the index will
+	    // be -1 and we'll use the default.
+	    float SourceSampleDistance = Z->GetWithDefault(sx, sy, SourceSample, 10000000);
+	    float StrokeSampleDistance = Z->GetWithDefault(x, y, StrokeSample, 10000000);
+	    float zDistance = min(SourceSampleDistance, StrokeSampleDistance);
+
+	    // Bias the distance closer to the camera.  We need to subtract at least a small amount to
+	    // make sure the stroke is on top of the source shape.  Subtracting more helps avoid aliasing
+	    // where two stroked objects are overlapping, but too much will cause strokes to be on top
+	    // of objects they shouldn't.
+	    zDistance -= config.pushTowardsCamera;
+	    // zDistance = 0;
+
+	    /*
+	     * An outer stroke is logically blended underneath the shape, and only antialiased on
+	     * the outer edge of the stroke.  The inner edge where the stroke meets the shape isn't
+	     * antialiased.  Instead, the antialiasing of the shape on top of it is what gives the
+	     * smooth blending from the stroke to the shape.  For intersection lines, the stroke
+	     * is between the source sample and samples below it.
+	     *
+	     * However, we want to put the stroke over the shape, not underneath it, so it can go over
+	     * other stroked objects.  Deal with this by mixing the existing color over the stroke color.
+	     */
+	    V4f topColor(0,0,0,0);
+	    for(int s = 0; s < image->NumSamples(x, y); ++s)
+	    {
+		float depth = Z->Get(x,y,s);
+		if(depth > SourceSampleDistance + 0.0001f + config.pushTowardsCamera)
+		    continue;
+
+		V4f c = rgba->Get(x,y,s);
+		topColor = topColor*(1-c[3]);
+
+		if(id->Get(x,y,s) == config.objectId || id->Get(x,y,s) == config.outputObjectId)
+		    id->Get(x,y,s) == config.outputObjectId)
+		    topColor += c;
+	    }
+
+	    // If the top color is completely opaque the stroke can't be seen at all, so
+	    // don't output a sample for it.
+	    if(topColor[3] >= 0.999f)
+		continue;
+
+	    V4f strokeColor = config.strokeColor * alpha;
+	    V4f mixedColor = topColor + strokeColor * (1-topColor[3]);
+
+	    // Don't add an empty sample.
+	    if(mixedColor[3] <= 0.00001f)
+		continue;
+
+	    // Add a sample for the stroke.
+	    outputImage->AddSample(x, y);
+
+	    auto rgbaOut = outputImage->GetChannel<V4f>("rgba");
+	    auto idOut = outputImage->GetChannel<uint32_t>("id");
+	    auto ZBackOut = outputImage->GetChannel<float>("ZBack");
+	    auto ZOut = outputImage->GetChannel<float>("Z");
+
+	    rgbaOut->GetLast(x,y) = mixedColor;
+	    ZOut->GetLast(x,y) = zDistance;
+	    ZBackOut->GetLast(x,y) = zDistance;
+	    idOut->GetLast(x,y) = config.outputObjectId != -1? config.outputObjectId:config.objectId;
 	}
-
-	// If the top color is completely opaque the stroke can't be seen at all, so
-	// don't output a sample for it.
-	if(topColor[3] >= 0.999f)
-	    return;
-
-	V4f strokeColor = config.strokeColor * alpha;
-	V4f mixedColor = topColor + strokeColor * (1-topColor[3]);
-
-	// Don't add an empty sample.
-	if(mixedColor[3] <= 0.00001f)
-	    return;
-
-	// Add a sample for the stroke.
-	outputImage->AddSample(x, y);
-
-	auto rgbaOut = outputImage->GetChannel<V4f>("rgba");
-	auto idOut = outputImage->GetChannel<uint32_t>("id");
-	auto ZBackOut = outputImage->GetChannel<float>("ZBack");
-	auto ZOut = outputImage->GetChannel<float>("Z");
-
-	rgbaOut->GetLast(x,y) = mixedColor;
-	ZOut->GetLast(x,y) = zDistance;
-	ZBackOut->GetLast(x,y) = zDistance;
-	idOut->GetLast(x,y) = config.outputObjectId != -1? config.outputObjectId:config.objectId;
-    });
+    }
 }
 
 // Return the number of pixels crossed when moving one pixel to the right, at a
