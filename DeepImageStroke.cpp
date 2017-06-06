@@ -717,7 +717,7 @@ void DeepImageStroke::ApplyStrokeUsingMask(const DeepImageStroke::Config &config
 
 	    for(int s = 0; s < image->NumSamples(x,y); ++s)
 	    {
-		if(id->Get(x,y,s) != config.objectId)
+		if(config.objectIds.find(id->Get(x,y,s)) == config.objectIds.end())
 		    continue;
 
 		if(nearest != -1)
@@ -767,7 +767,7 @@ void DeepImageStroke::ApplyStrokeUsingMask(const DeepImageStroke::Config &config
 	    rgba->GetLast(x,y) = V4f(distance, distance, distance, 1);
 	    Z->GetLast(x,y) = 1;
 	    ZBack->GetLast(x,y) = 1;
-	    id->GetLast(x,y) = config.outputObjectId != -1? config.outputObjectId:config.objectId;
+	    id->GetLast(x,y) = config.outputObjectId;
 	    continue;
 #endif
 
@@ -826,7 +826,7 @@ void DeepImageStroke::ApplyStrokeUsingMask(const DeepImageStroke::Config &config
 		V4f c = rgba->Get(x,y,s);
 		topColor = topColor*(1-c[3]);
 
-		if(id->Get(x,y,s) == config.objectId || id->Get(x,y,s) == config.outputObjectId)
+		if(config.objectIds.find(id->Get(x,y,s)) != config.objectIds.end() ||
 		    id->Get(x,y,s) == config.outputObjectId)
 		    topColor += c;
 	    }
@@ -854,7 +854,7 @@ void DeepImageStroke::ApplyStrokeUsingMask(const DeepImageStroke::Config &config
 	    rgbaOut->GetLast(x,y) = mixedColor;
 	    ZOut->GetLast(x,y) = zDistance;
 	    ZBackOut->GetLast(x,y) = zDistance;
-	    idOut->GetLast(x,y) = config.outputObjectId != -1? config.outputObjectId:config.objectId;
+	    idOut->GetLast(x,y) = config.outputObjectId;
 	}
     }
 }
@@ -1003,7 +1003,7 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 		float totalDifference = 0;
 		for(int s1 = 0; s1 < image->NumSamples(x,y); ++s1)
 		{
-		    if(id->Get(x,y,s1) != config.objectId)
+		    if(config.objectIds.find(id->Get(x,y,s1)) == config.objectIds.end())
 			continue;
 
 		    // Skip this sample if it's completely occluded.
@@ -1047,7 +1047,7 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionMask(const DeepImageS
 
 		    for(int s2 = 0; s2 < image->NumSamples(x2,y2); ++s2)
 		    {
-			if(id->Get(x2,y2,s2) != config.objectId)
+			if(config.objectIds.find(id->Get(x2,y2,s2)) == config.objectIds.end())
 			    continue;
 
 			// Skip this sample if it's completely occluded.
@@ -1140,7 +1140,7 @@ void EXROperation_Stroke::AddStroke(const DeepImageStroke::Config &config, share
     // intersection strokes to other strokes.
     shared_ptr<SimpleImage> strokeMask;
     if(config.strokeOutline)
-	strokeMask = DeepImageUtil::CollapseEXR(image, strokeVisibilityMask, { config.objectId });
+	strokeMask = DeepImageUtil::CollapseEXR(image, strokeVisibilityMask, config.objectIds);
 
     // Create the intersection mask.  It's important that we do this before applying the stroke.
     shared_ptr<SimpleImage> intersectionMask;
@@ -1187,7 +1187,11 @@ EXROperation_Stroke::EXROperation_Stroke(const SharedConfig &sharedConfig_, stri
     strokeDesc.intersectionFade *= sharedConfig.worldSpaceScale;
     strokeDesc.pushTowardsCamera *= sharedConfig.worldSpaceScale;
 
-    strokeDesc.objectId = atoi(opt.c_str());
+    vector<string> ids;
+    split(opt, ",", ids);
+    for(string id: ids)
+	strokeDesc.objectIds.insert(atoi(id.c_str()));
+    strokeDesc.outputObjectId = atoi(ids[0].c_str());
 
     for(auto it: arguments)
     {

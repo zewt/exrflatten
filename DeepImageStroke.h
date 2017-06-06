@@ -15,8 +15,8 @@ namespace DeepImageStroke
 {
     struct Config
     {
-	int objectId = 0;
-	int outputObjectId = -1;
+	set<int> objectIds;
+	int outputObjectId = 0;
 	float radius = 1.0f;
 
 	string strokeMaskChannel, intersectionMaskChannel;
