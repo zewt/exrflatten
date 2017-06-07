@@ -57,7 +57,9 @@ namespace DeepImageStroke
     float DistanceAndRadiusToAlpha(float distance, const Config &config);
 
     shared_ptr<SimpleImage> CreateIntersectionPattern(const DeepImageStroke::Config &config,
-	shared_ptr<const DeepImage> image, shared_ptr<const TypedDeepImageChannel<float>> imageMask);
+	shared_ptr<const DeepImage> image,
+	shared_ptr<const TypedDeepImageChannel<float>> strokeMask,
+	shared_ptr<const TypedDeepImageChannel<float>> intersectionMask);
     void ApplyStrokeUsingMask(const DeepImageStroke::Config &config,
 	shared_ptr<const DeepImage> image, shared_ptr<DeepImage> outputImage,
 	shared_ptr<SimpleImage> mask);

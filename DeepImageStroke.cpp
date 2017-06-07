@@ -263,7 +263,8 @@ static float CalculateDepthScale(const DeepImageStroke::Config &config, shared_p
 // like Maya.  "1cm" really just means one world space unit.
 shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionPattern(const DeepImageStroke::Config &config,
     shared_ptr<const DeepImage> image,
-    shared_ptr<const TypedDeepImageChannel<float>> imageMask)
+    shared_ptr<const TypedDeepImageChannel<float>> strokeMask,
+    shared_ptr<const TypedDeepImageChannel<float>> intersectionMask)
 {
     shared_ptr<SimpleImage> pattern = make_shared<SimpleImage>(image->width, image->height);
 
@@ -428,8 +429,14 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionPattern(const DeepIma
 			result *= sampleVisibility1 * sampleVisibility2;
 
 			// If we have a mask, apply it now like visibility.
-			if(imageMask)
-			    result *= imageMask->Get(x,y,s1);
+			//
+			// If the object ID is the same then this is an object crossing over itself, so
+			// use the intersection mask.  If the ID is different then it's one object on top
+			// of another, so use the stroke mask.
+			shared_ptr<const TypedDeepImageChannel<float>> &mask =
+			    id->Get(x,y,s1) == id->Get(x2,y2,s2)? intersectionMask:strokeMask;
+			if(mask)
+			    result *= mask->Get(x,y,s1);
 
 			totalDifference += result;
 		    }
@@ -481,7 +488,7 @@ void EXROperation_Stroke::AddStroke(const DeepImageStroke::Config &config, share
     shared_ptr<SimpleImage> intersectionPattern;
     if(config.strokeIntersections)
     {
-	intersectionPattern = CreateIntersectionPattern(config, image, intersectionVisibilityMask);
+	intersectionPattern = CreateIntersectionPattern(config, image, strokeVisibilityMask, intersectionVisibilityMask);
 
 	// This is just for diagnostics.
 	if(intersectionPattern && !config.saveIntersectionPattern.empty())
