@@ -174,7 +174,7 @@ void EXROperation_WriteLayers::Run(shared_ptr<EXROperationState> state) const
 	    continue;
 
 	printf("Writing %s\n", layer.filename.c_str());
-	layer.image->WriteEXR(layer.filename);
+        SimpleImage::WriteEXR(layer.filename, layer.image);
     }
 }
 

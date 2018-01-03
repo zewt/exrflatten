@@ -68,7 +68,7 @@ public:
 
 	string f = sharedConfig.GetFilename(filename);
 	printf("Writing %s\n", f.c_str());
-	flat->WriteEXR(f);
+	SimpleImage::WriteEXR(f, flat);
     }
 
 private:

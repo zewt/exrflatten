@@ -492,7 +492,7 @@ void EXROperation_Stroke::AddStroke(const DeepImageStroke::Config &config, share
 
 	// This is just for diagnostics.
 	if(intersectionPattern && !config.saveIntersectionPattern.empty())
-	    intersectionPattern->WriteEXR(config.saveIntersectionPattern);
+	    SimpleImage::WriteEXR(config.saveIntersectionPattern, intersectionPattern);
     }
 
     // Apply the regular stroke and the intersection stroke.

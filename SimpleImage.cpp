@@ -24,23 +24,23 @@ void SimpleImage::SetColor(V4f color)
     }
 }
 
-void SimpleImage::WriteEXR(string filename) const
+void SimpleImage::WriteEXR(string filename, shared_ptr<const SimpleImage> image)
 {
-    Header headerCopy(header);
+    Header headerCopy(image->header);
     headerCopy.channels().insert("R", Channel(FLOAT));
     headerCopy.channels().insert("G", Channel(FLOAT));
     headerCopy.channels().insert("B", Channel(FLOAT));
     headerCopy.channels().insert("A", Channel(FLOAT));
 
     FrameBuffer frameBuffer;
-    frameBuffer.insert("R", Slice(FLOAT, (char *) &(data[0].x), sizeof(V4f), sizeof(V4f) * width));
-    frameBuffer.insert("G", Slice(FLOAT, (char *) &(data[0].y), sizeof(V4f), sizeof(V4f) * width));
-    frameBuffer.insert("B", Slice(FLOAT, (char *) &(data[0].z), sizeof(V4f), sizeof(V4f) * width));
-    frameBuffer.insert("A", Slice(FLOAT, (char *) &(data[0].w), sizeof(V4f), sizeof(V4f) * width));
+    frameBuffer.insert("R", Slice(FLOAT, (char *) &(image->data[0].x), sizeof(V4f), sizeof(V4f) * image->width));
+    frameBuffer.insert("G", Slice(FLOAT, (char *) &(image->data[0].y), sizeof(V4f), sizeof(V4f) * image->width));
+    frameBuffer.insert("B", Slice(FLOAT, (char *) &(image->data[0].z), sizeof(V4f), sizeof(V4f) * image->width));
+    frameBuffer.insert("A", Slice(FLOAT, (char *) &(image->data[0].w), sizeof(V4f), sizeof(V4f) * image->width));
 
     OutputFile file(filename.c_str(), headerCopy);
     file.setFrameBuffer(frameBuffer);
-    file.writePixels(height);
+    file.writePixels(image->height);
 }
 
 bool SimpleImage::IsEmpty() const

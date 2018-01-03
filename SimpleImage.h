@@ -29,7 +29,7 @@ public:
 
     void SetColor(Imath::V4f color);
 
-    void WriteEXR(string filename) const;
+    static void WriteEXR(string filename, shared_ptr<const SimpleImage> image);
 
     // Return true if this image is completely transparent.
     bool IsEmpty() const;
