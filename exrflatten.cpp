@@ -50,12 +50,21 @@ public:
     EXROperation_SaveFlattenedImage(const SharedConfig &sharedConfig_, string opt, vector<pair<string,string>> args):
 	sharedConfig(sharedConfig_)
     {
-	filename = opt;
+        filename = opt;
+
+        for(auto it: args)
+        {
+            string arg = it.first;
+            string value = it.second;
+
+            if(arg == "object-id")
+                objectIds.insert(atoi(value.c_str()));
+        }
     }
 
     void Run(shared_ptr<EXROperationState> state) const
     {
-	auto flat = DeepImageUtil::CollapseEXR(state->image);
+	auto flat = DeepImageUtil::CollapseEXR(state->image, nullptr, objectIds);
 
 	string f = sharedConfig.GetFilename(filename);
 	printf("Writing %s\n", f.c_str());
@@ -65,6 +74,7 @@ public:
 private:
     string filename;
     const SharedConfig &sharedConfig;
+    set<int> objectIds;
 };
 
 struct Config
