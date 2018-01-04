@@ -33,6 +33,13 @@ template<> int GetEXRElementSize<V3f>() { return sizeof(float); }
 template<> int GetEXRElementSize<V4f>() { return sizeof(float); }
 template<> int GetEXRElementSize<uint32_t>() { return sizeof(uint32_t); }
 
+// Return the number of elements in each data type.
+template<class T> int GetEXRElementCount();
+template<> int GetEXRElementCount<float>() { return 1; }
+template<> int GetEXRElementCount<V3f>() { return 3; }
+template<> int GetEXRElementCount<V4f>() { return 4; }
+template<> int GetEXRElementCount<uint32_t>() { return 1; }
+
 DeepImageChannel::DeepImageChannel(int width_, int height_, const Array2D<unsigned int> &sampleCount_):
     width(width_), height(height_),
     sampleCount(sampleCount_)
@@ -122,7 +129,12 @@ void TypedDeepImageChannel<T>::AddToFramebuffer(string name, const Header &heade
     // Make sure we don't add the same channel multiple times, since the second one
     // will silently replace the first.
     if(frameBuffer.findSlice(name) != NULL)
-	throw exception("The same EXR channel was added more than once");
+	throw StringException("The same EXR channel was added more than once");
+
+    // This can happen if we add an RGB layer to something that's only reading a
+    // float.  Ignore extra channels.
+    if(channel >= GetEXRElementCount<T>())
+        return;
 
     // When reading deep files, OpenEXR expects a packed array of pointers for each pixel,
     // pointing to an array of sample values, and it takes a stride value from one sample
@@ -266,7 +278,7 @@ shared_ptr<DeepImage> DeepImageReader::Open(string filename)
 	auto tempFile = make_shared<InputFile>(filename.c_str());
 	int fileVersion = tempFile->version();
 	if((fileVersion & 0x800) == 0)
-	    throw exception("Input file is not a deep EXR.");
+            StringException("Input file is not a deep EXR.");
     }
 
     file = make_shared<DeepScanLineInputFile>(filename.c_str());
