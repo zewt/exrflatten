@@ -19,7 +19,12 @@ namespace DeepImageUtil {
     vector<string> GetChannelsInLayer(const Imf::Header &header, string layerName);
 
     // Flatten the color channels of a deep EXR to a simple flat layer.
-    shared_ptr<SimpleImage> CollapseEXR(shared_ptr<const DeepImage> image, shared_ptr<const TypedDeepImageChannel<float>> mask = nullptr, set<int> objectIds = {});
+    // If color is null, the mask will be flattened against white.
+    shared_ptr<SimpleImage> CollapseEXR(
+	    shared_ptr<const DeepImage> image,
+	    shared_ptr<const TypedDeepImageChannel<Imath::V4f>> color,
+	    shared_ptr<const TypedDeepImageChannel<float>> mask = nullptr,
+	    set<int> objectIds = {});
 
     // Change all samples with an object ID of fromObjectId to intoObjectId.
     void CombineObjectId(shared_ptr<TypedDeepImageChannel<uint32_t>> id, int fromObjectId, int intoObjectId);

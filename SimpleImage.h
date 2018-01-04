@@ -10,6 +10,9 @@
 using namespace std;
 
 // A simple container for an output EXR containing only RGBA data.
+//
+// This can also be used to hold a mask, in which case the data will be
+// in A, and R, G, and B will be 1.
 class SimpleImage
 {
 public:
@@ -29,7 +32,21 @@ public:
 
     void SetColor(Imath::V4f color);
 
-    static void WriteEXR(string filename, shared_ptr<const SimpleImage> image);
+    class EXRLayersToWrite
+    {
+    public:
+        EXRLayersToWrite(shared_ptr<const SimpleImage> image_): image(image_) { }
+
+        // The source image.
+        shared_ptr<const SimpleImage> image; 
+
+        // The layer name to write this as, or blank for no layer.
+        string layerName;
+
+        // If false, write RGBA.  Otherwise, write only alpha as a luminance channel (Y).
+        bool alphaOnly = false;
+    };
+    static void WriteEXR(string filename, vector<EXRLayersToWrite> layers);
 
     // Return true if this image is completely transparent.
     bool IsEmpty() const;

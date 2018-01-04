@@ -482,7 +482,9 @@ void EXROperation_Stroke::AddStroke(const DeepImageStroke::Config &config, share
     // intersection strokes to other strokes.
     shared_ptr<SimpleImage> strokeMask;
     if(config.strokeOutline)
-	strokeMask = DeepImageUtil::CollapseEXR(image, strokeVisibilityMask, config.objectIds);
+	strokeMask = DeepImageUtil::CollapseEXR(image,
+            image->GetChannel<V4f>("rgba"),
+            strokeVisibilityMask, config.objectIds);
 
     // Create the intersection mask.  It's important that we do this before applying the stroke.
     shared_ptr<SimpleImage> intersectionPattern;
@@ -492,7 +494,7 @@ void EXROperation_Stroke::AddStroke(const DeepImageStroke::Config &config, share
 
 	// This is just for diagnostics.
 	if(intersectionPattern && !config.saveIntersectionPattern.empty())
-	    SimpleImage::WriteEXR(config.saveIntersectionPattern, intersectionPattern);
+            SimpleImage::WriteEXR(config.saveIntersectionPattern, { SimpleImage::EXRLayersToWrite(intersectionPattern) });
     }
 
     // Apply the regular stroke and the intersection stroke.
