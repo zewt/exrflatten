@@ -67,7 +67,6 @@ void EXROperation_WriteLayers::AddChannels(shared_ptr<DeepImage> image, DeepFram
 void EXROperation_WriteLayers::Run(shared_ptr<EXROperationState> state) const
 {
     shared_ptr<DeepImage> image = state->image;
-    vector<Layer> layers;
 
     vector<LayerDesc> layerDescsCopy = layerDescs;
 
@@ -118,47 +117,93 @@ void EXROperation_WriteLayers::Run(shared_ptr<EXROperationState> state) const
 	}
     }
 
-    // Separate the image into layers.
     int nextOrder = 1;
-    auto getLayer = [&](string layerName, string layerType, int width, int height, bool ordered)
+    vector<shared_ptr<OutputImage>> outputImages;
+    auto createOutputImage = [&](string layerName, string layerType, bool ordered)
     {
-	layers.push_back(Layer(width, height));
-	Layer &layer = layers.back();
-	layer.layerName = layerName;
-	layer.layerType = layerType;
+        outputImages.push_back(make_shared<OutputImage>());
+        shared_ptr<OutputImage> newImage = outputImages.back();
+        newImage->layerName = layerName;
+        newImage->layerType = layerType;
 	if(ordered)
-	    layer.order = nextOrder++;
+            newImage->order = nextOrder++;
 
-	// Copy all image attributes, except for built-in EXR headers that we shouldn't set.
-	DeepImageUtil::CopyLayerAttributes(image->header, layer.image->header);
+        newImage->filename = MakeOutputFilename(*newImage.get());
 
-	layer.filename = MakeOutputFilename(layer);
-
-	return layer.image;
+	return newImage;
     };
 
+    auto addLayer = [&](shared_ptr<OutputImage> outputImage, shared_ptr<SimpleImage> imageToAdd)
+    {
+        // Copy all image attributes, except for built-in EXR headers that we shouldn't set.
+        DeepImageUtil::CopyLayerAttributes(image->header, imageToAdd->header);
+
+        // Add it to the layer list to be written.
+        outputImage->layers.push_back(SimpleImage::EXRLayersToWrite(imageToAdd));
+
+        return &outputImage->layers.back();
+    };
+
+    // Separate the image into output images.
     for(auto layerDesc: layerDescsCopy)
     {
 	// Skip this layer if we've removed it from layerOrder.
 	if(layerOrder.find(layerDesc.objectId) == layerOrder.end())
-	    continue;
+        {
+            // Skip this order number, so filenames stay consistent.
+            nextOrder++;
+            continue;
+        }
 
 	string layerName = layerDesc.layerName;
 
-	auto colorOut = getLayer(layerName, "color", image->width, image->height, true);
-	DeepImageUtil::SeparateLayer(image, collapsedId, layerDesc.objectId, colorOut, layerOrder, nullptr);
+        // Create an output image named "color", and extract the layer into it.
+        auto colorImageOutput = make_shared<SimpleImage>(image->width, image->height);
+        DeepImageUtil::SeparateLayer(image, collapsedId, layerDesc.objectId, colorImageOutput, layerOrder, nullptr);
 
+        // If the color layer is completely empty, don't create it.
+        if(colorImageOutput->IsEmpty())
+        {
+            // Skip this order number, so filenames stay consistent.
+            nextOrder++;
+            continue;
+        }
+
+        auto &colorImageOut = createOutputImage(layerName, "color", true);
+        addLayer(colorImageOut, colorImageOutput);
+
+        // Create output layers for each of this color layer's masks.
 	for(auto maskDesc: masks)
 	{
 	    auto mask = image->GetChannel<float>(maskDesc.maskChannel);
 	    if(mask == nullptr)
 		continue;
 
-	    auto maskOut = getLayer(layerName, maskDesc.maskName, image->width, image->height, false);
-	    if(maskDesc.maskType == MaskDesc::MaskType_Composited)
+            if(maskDesc.maskType == MaskDesc::MaskType_EXRLayer)
+            {
+                // Instead of creating a layer that will be output to its own EXR
+                // file, put the mask in an EXR layer in the color layer file.
+                auto A = image->GetAlphaChannel();
+
+                shared_ptr<SimpleImage> maskOut = make_shared<SimpleImage>(image->width, image->height);
+                DeepImageUtil::ExtractMask(true, true, mask, A, collapsedId, layerDesc.objectId, maskOut);
+
+                // Add this image as a layer in the color image.
+                SimpleImage::EXRLayersToWrite *maskLayer = addLayer(colorImageOut, maskOut);
+                maskLayer->layerName = maskDesc.maskName;
+                maskLayer->alphaOnly = true;
+                    
+                continue;
+            }
+
+            auto maskOutImage = createOutputImage(layerName, maskDesc.maskName, false);
+            auto maskOut = make_shared<SimpleImage>(image->width, image->height);
+            addLayer(maskOutImage, maskOut);
+            if(maskDesc.maskType == MaskDesc::MaskType_Composited)
     		DeepImageUtil::SeparateLayer(image, collapsedId, layerDesc.objectId, maskOut, layerOrder, mask);
 	    else
 	    {
+                // MaskType_Greyscale or MaskType_Alpha
 		bool useAlpha = maskDesc.maskType == MaskDesc::MaskType_Alpha;
 		auto A = image->GetAlphaChannel();
 		DeepImageUtil::ExtractMask(useAlpha, true, mask, A, collapsedId, layerDesc.objectId, maskOut);
@@ -167,19 +212,15 @@ void EXROperation_WriteLayers::Run(shared_ptr<EXROperationState> state) const
     }
 
     // Write the layers.
-    for(const auto &layer: layers)
+    for(const auto &outputImage: outputImages)
     {
-	// Don't write this layer if it's completely empty.
-	if(layer.image->IsEmpty())
-	    continue;
-
-	printf("Writing %s\n", layer.filename.c_str());
-        SimpleImage::WriteEXR(layer.filename, { SimpleImage::EXRLayersToWrite(layer.image) });
+        printf("Writing %s\n", outputImage->filename.c_str());
+        SimpleImage::WriteEXR(outputImage->filename, outputImage->layers);
     }
 }
 
 // Do simple substitutions on the output filename.
-string EXROperation_WriteLayers::MakeOutputFilename(const Layer &layer) const
+string EXROperation_WriteLayers::MakeOutputFilename(const OutputImage &layer) const
 {
     string outputName = outputPattern;
 
@@ -254,7 +295,13 @@ void EXROperation_WriteLayers::MaskDesc::ParseOptionsString(string optionsString
 	    continue;
 
 	if(args[0] == "channel" && args.size() > 1)
+        {
 	    maskChannel = args[1].c_str();
+
+            // If no mask name is specified, use the input channel by default.
+            if(maskName.empty())
+                maskName = maskChannel;
+        }
 	else if(args[0] == "name" && args.size() > 1)
 	    maskName = args[1].c_str();
 	else if(args[0] == "grey")
@@ -263,6 +310,8 @@ void EXROperation_WriteLayers::MaskDesc::ParseOptionsString(string optionsString
 	    maskType = MaskType_Alpha;
 	else if(args[0] == "rgb")
 	    maskType = MaskType_Composited;
+        else if(args[0] == "exrlayer")
+            maskType = MaskType_EXRLayer;
     }
 }
 

@@ -21,17 +21,17 @@ private:
     const SharedConfig &sharedConfig;
     string outputPattern = "<inputname> <ordername> <layer>.exr";
 
-    struct Layer
+    // This represents a single output file.
+    struct OutputImage
     {
 	string filename;
 	string layerName;
 	string layerType;
 	int order = 0;
-	shared_ptr<SimpleImage> image;
+        vector<SimpleImage::EXRLayersToWrite> layers;
 
-	Layer(int width, int height)
+        OutputImage()
 	{
-	    image = make_shared<SimpleImage>(width, height);
 	}
     };
 
@@ -57,6 +57,9 @@ private:
 	    // The mask will be composited with the color channel and output as a pre-masked
 	    // RGBA image.
 	    MaskType_Composited,
+
+            // The mask will be output as a luminance channel in the output EXR file.
+            MaskType_EXRLayer,
 	};
 	MaskType maskType = MaskType_Greyscale;
 	string maskChannel;
@@ -67,7 +70,7 @@ private:
     // A list of (dst, src) pairs to combine layers before writing them.
     vector<pair<int,int>> combines;
 
-    string MakeOutputFilename(const Layer &layer) const;
+    string MakeOutputFilename(const OutputImage &layer) const;
     string GetFrameNumberFromFilename(string s) const;
 };
 

@@ -297,6 +297,9 @@ substitution.
 - **alpha** Output an alpha mask.  This mode is useful in combination with Photoshop clipping
 masks.
 - **rgb** Composite the mask onto the layer color, and output the result.
+- **exrlayer** Instead of writing the mask to a separate file, add it as a luminance channel
+in the corresponding color layer's EXR.  The name argument specifies the EXR layer name, otherwise
+the channel will be used by default.
 
 ### Operation: --create-mask
 
