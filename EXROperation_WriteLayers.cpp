@@ -161,7 +161,7 @@ void EXROperation_WriteLayers::Run(shared_ptr<EXROperationState> state) const
 	    {
 		bool useAlpha = maskDesc.maskType == MaskDesc::MaskType_Alpha;
 		auto A = image->GetAlphaChannel();
-		DeepImageUtil::ExtractMask(useAlpha, false, mask, A, collapsedId, layerDesc.objectId, maskOut);
+		DeepImageUtil::ExtractMask(useAlpha, true, mask, A, collapsedId, layerDesc.objectId, maskOut);
 	    }
 	}
     }
