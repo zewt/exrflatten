@@ -5,6 +5,7 @@
 #include <memory>
 #include <OpenEXR/ImathVec.h>
 #include "DeepImage.h"
+#include "EXROperation.h"
 
 using namespace std;
 
@@ -56,17 +57,17 @@ namespace DeepImageStroke
     // the shape and the radius of the stroke.
     float DistanceAndRadiusToAlpha(float distance, const Config &config);
 
-    shared_ptr<SimpleImage> CreateIntersectionPattern(const DeepImageStroke::Config &config,
+    shared_ptr<SimpleImage> CreateIntersectionPattern(
+        const DeepImageStroke::Config &config, const SharedConfig &sharedConfig,
 	shared_ptr<const DeepImage> image,
 	shared_ptr<const TypedDeepImageChannel<float>> strokeMask,
 	shared_ptr<const TypedDeepImageChannel<float>> intersectionMask);
-    void ApplyStrokeUsingMask(const DeepImageStroke::Config &config,
+    void ApplyStrokeUsingMask(const DeepImageStroke::Config &config, const SharedConfig &sharedConfig,
 	shared_ptr<const DeepImage> image, shared_ptr<DeepImage> outputImage,
 	shared_ptr<SimpleImage> mask);
 }
 
 // Use DeepImageStroke to add a stroke.
-#include "EXROperation.h"
 class EXROperation_Stroke: public EXROperation
 {
 public:

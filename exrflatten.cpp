@@ -69,6 +69,8 @@ public:
         // Request any masks we're including.
         for(string mask_name: includedMasks)
             image->AddChannelToFramebuffer<float>(mask_name, frameBuffer, true);
+
+        image->AddChannelToFramebuffer<uint32_t>(sharedConfig.idChannel, frameBuffer, false);
     }
 
     void Run(shared_ptr<EXROperationState> state) const
@@ -79,6 +81,7 @@ public:
 
         // Add the main RGBA layer.
         auto flat = DeepImageUtil::CollapseEXR(state->image,
+            state->image->GetChannel<uint32_t>(sharedConfig.idChannel),
             state->image->GetChannel<V4f>("rgba"),
             nullptr,
             objectIds);
@@ -219,7 +222,6 @@ void Config::Run() const
 	DeepFrameBuffer frameBuffer;
 	image->AddSampleCountSliceToFramebuffer(frameBuffer);
 	image->AddChannelToFramebuffer<V4f>("rgba", frameBuffer, false);
-	image->AddChannelToFramebuffer<uint32_t>("id", frameBuffer, false);
 	image->AddChannelToFramebuffer<float>("Z", frameBuffer, false);
 	image->AddChannelToFramebuffer<float>("ZBack", frameBuffer, false);
 

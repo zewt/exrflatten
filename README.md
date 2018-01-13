@@ -237,6 +237,8 @@ Global options come first on the commandline:
 any commands.  
 **--output=path** Specify the directory to hold input files.  This path will be prefixed to
 all output paths.  
+**--id=channel** Change the EXR channel used for object IDs.  By default, the standard channel
+ID is used.
 **--scale=[cm|meters|feet|#]** Set the scene scale (default: cm).  "meters" is an alias for 100,
 and "feet" is an alias for 30.48.
 

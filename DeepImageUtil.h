@@ -22,6 +22,7 @@ namespace DeepImageUtil {
     // If color is null, the mask will be flattened against white.
     shared_ptr<SimpleImage> CollapseEXR(
 	    shared_ptr<const DeepImage> image,
+	    shared_ptr<const TypedDeepImageChannel<uint32_t>> id,
 	    shared_ptr<const TypedDeepImageChannel<Imath::V4f>> color,
 	    shared_ptr<const TypedDeepImageChannel<float>> mask = nullptr,
 	    set<int> objectIds = {});

@@ -58,6 +58,7 @@ vector<string> DeepImageUtil::GetChannelsInLayer(const Header &header, string la
 // Flatten the color channels of a deep EXR to a simple flat layer.
 shared_ptr<SimpleImage> DeepImageUtil::CollapseEXR(
 	shared_ptr<const DeepImage> image,
+        shared_ptr<const TypedDeepImageChannel<uint32_t>> id,
 	shared_ptr<const TypedDeepImageChannel<V4f>> rgba,
 	shared_ptr<const TypedDeepImageChannel<float>> mask,
 	set<int> objectIds)
@@ -65,7 +66,6 @@ shared_ptr<SimpleImage> DeepImageUtil::CollapseEXR(
     shared_ptr<SimpleImage> result = make_shared<SimpleImage>(image->width, image->height);
 
     auto Z = image->GetChannel<float>("Z");
-    auto id = image->GetChannel<uint32_t>("id");
 
     for(int y = 0; y < image->height; y++)
     {

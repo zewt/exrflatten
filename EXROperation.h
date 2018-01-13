@@ -18,6 +18,7 @@ struct SharedConfig
 {
     string outputPath;
     vector<string> inputFilenames;
+    string idChannel = "id";
 
     // Tunable distance values are in cm.  This can be used to adjust all distances for
     // scenes with a different scale.  If you're in meters, this should be 100, to indicate

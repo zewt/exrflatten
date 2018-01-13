@@ -34,10 +34,11 @@ float DeepImageStroke::DistanceAndRadiusToAlpha(float distance, const Config &co
     return scale_clamp(distance, config.radius, config.radius+config.fade, 1.0f, 0.0f);
 }
 
-void DeepImageStroke::ApplyStrokeUsingMask(const DeepImageStroke::Config &config, shared_ptr<const DeepImage> image, shared_ptr<DeepImage> outputImage, shared_ptr<SimpleImage> mask)
+void DeepImageStroke::ApplyStrokeUsingMask(const DeepImageStroke::Config &config, const SharedConfig &sharedConfig,
+    shared_ptr<const DeepImage> image, shared_ptr<DeepImage> outputImage, shared_ptr<SimpleImage> mask)
 {
     auto rgba = image->GetChannel<V4f>("rgba");
-    auto id = image->GetChannel<uint32_t>("id");
+    auto id = image->GetChannel<uint32_t>(sharedConfig.idChannel);
     auto Z = image->GetChannel<float>("Z");
 
     // Find closest sample (for our object ID) to the camera for each point.
@@ -182,7 +183,7 @@ void DeepImageStroke::ApplyStrokeUsingMask(const DeepImageStroke::Config &config
 	    outputImage->AddSample(x, y);
 
 	    auto rgbaOut = outputImage->GetChannel<V4f>("rgba");
-	    auto idOut = outputImage->GetChannel<uint32_t>("id");
+	    auto idOut = outputImage->GetChannel<uint32_t>(sharedConfig.idChannel);
 	    auto ZBackOut = outputImage->GetChannel<float>("ZBack");
 	    auto ZOut = outputImage->GetChannel<float>("Z");
 
@@ -261,7 +262,9 @@ static float CalculateDepthScale(const DeepImageStroke::Config &config, shared_p
 //
 // Note that to make comments easier to follow, this pretends world space units are in cm,
 // like Maya.  "1cm" really just means one world space unit.
-shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionPattern(const DeepImageStroke::Config &config,
+shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionPattern(
+    const DeepImageStroke::Config &config,
+    const SharedConfig &sharedConfig,
     shared_ptr<const DeepImage> image,
     shared_ptr<const TypedDeepImageChannel<float>> strokeMask,
     shared_ptr<const TypedDeepImageChannel<float>> intersectionMask)
@@ -269,7 +272,7 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionPattern(const DeepIma
     shared_ptr<SimpleImage> pattern = make_shared<SimpleImage>(image->width, image->height);
 
     // Create a mask using simple edge detection.
-    auto id = image->GetChannel<uint32_t>("id");
+    auto id = image->GetChannel<uint32_t>(sharedConfig.idChannel);
     auto Z = image->GetChannel<float>("Z");
     auto A = image->GetAlphaChannel();
 
@@ -483,6 +486,7 @@ void EXROperation_Stroke::AddStroke(const DeepImageStroke::Config &config, share
     shared_ptr<SimpleImage> strokeMask;
     if(config.strokeOutline)
 	strokeMask = DeepImageUtil::CollapseEXR(image,
+            image->GetChannel<uint32_t>(sharedConfig.idChannel),
             image->GetChannel<V4f>("rgba"),
             strokeVisibilityMask, config.objectIds);
 
@@ -490,7 +494,7 @@ void EXROperation_Stroke::AddStroke(const DeepImageStroke::Config &config, share
     shared_ptr<SimpleImage> intersectionPattern;
     if(config.strokeIntersections)
     {
-	intersectionPattern = CreateIntersectionPattern(config, image, strokeVisibilityMask, intersectionVisibilityMask);
+	intersectionPattern = CreateIntersectionPattern(config, sharedConfig, image, strokeVisibilityMask, intersectionVisibilityMask);
 
 	// This is just for diagnostics.
 	if(intersectionPattern && !config.saveIntersectionPattern.empty())
@@ -499,9 +503,9 @@ void EXROperation_Stroke::AddStroke(const DeepImageStroke::Config &config, share
 
     // Apply the regular stroke and the intersection stroke.
     if(config.strokeOutline)
-	ApplyStrokeUsingMask(config, image, outputImage, strokeMask);
+	ApplyStrokeUsingMask(config, sharedConfig, image, outputImage, strokeMask);
     if(config.strokeIntersections && intersectionPattern)
-	ApplyStrokeUsingMask(config, image, outputImage, intersectionPattern);
+	ApplyStrokeUsingMask(config, sharedConfig, image, outputImage, intersectionPattern);
 
     // Make sure the output image is sorted.
     DeepImageUtil::SortSamplesByDepth(outputImage);
@@ -588,6 +592,8 @@ EXROperation_Stroke::EXROperation_Stroke(const SharedConfig &sharedConfig_, stri
 
 void EXROperation_Stroke::AddChannels(shared_ptr<DeepImage> image, DeepFrameBuffer &frameBuffer) const
 {
+    image->AddChannelToFramebuffer<uint32_t>(sharedConfig.idChannel, frameBuffer, false);
+
     if(strokeDesc.strokeIntersections)
     {
 	if(strokeDesc.intersectionsUseDistance)

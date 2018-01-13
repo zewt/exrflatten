@@ -61,7 +61,9 @@ void EXROperation_WriteLayers::AddChannels(shared_ptr<DeepImage> image, DeepFram
 {
     // Add channels used by masks.
     for(auto maskDesc: masks)
-	image->AddChannelToFramebuffer<float>(maskDesc.maskChannel, frameBuffer, true);
+        image->AddChannelToFramebuffer<float>(maskDesc.maskChannel, frameBuffer, true);
+
+    image->AddChannelToFramebuffer<uint32_t>(sharedConfig.idChannel, frameBuffer, false);
 }
 
 void EXROperation_WriteLayers::Run(shared_ptr<EXROperationState> state) const
@@ -97,7 +99,7 @@ void EXROperation_WriteLayers::Run(shared_ptr<EXROperationState> state) const
     }
 
     // Combine layers.  This just changes the object IDs of samples, so we don't need to re-sort.
-    shared_ptr<TypedDeepImageChannel<uint32_t>> collapsedId(image->GetChannel<uint32_t>("id")->Clone());
+    shared_ptr<TypedDeepImageChannel<uint32_t>> collapsedId(image->GetChannel<uint32_t>(sharedConfig.idChannel)->Clone());
     for(auto combine: combines)
 	DeepImageUtil::CombineObjectId(collapsedId, combine.second, combine.first);
 

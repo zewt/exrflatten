@@ -28,6 +28,12 @@ bool SharedConfig::ParseOption(string opt, string value)
 	if(worldSpaceScale < 0.0001f)
 	    throw StringException("Invalid world space scale: " + value);
     }
+    else if(opt == "id")
+    {
+        // Change the name of the layer used for IDs.
+        idChannel = value;
+        return true;
+    }
 
     return false;
 }
