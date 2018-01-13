@@ -84,7 +84,7 @@ shared_ptr<SimpleImage> DeepImageUtil::CollapseEXR(
 		    color = rgba->Get(x,y,s);
 
 		if(mask)
-		    color *= mask->Get(x,y,s);
+		    color *= clamp(mask->Get(x, y, s), 0.0f, 1.0f);
 
 		float alpha = color[3];
 		for(int channel = 0; channel < 4; ++channel)
@@ -260,7 +260,7 @@ void DeepImageUtil::SeparateLayer(
 
 		// If we have a mask, multiply rgba by it to get a masked version.
 		if(mask != nullptr)
-		    sampleColor *= mask->Get(x, y, s);
+		    sampleColor *= clamp(mask->Get(x, y, s), 0.0f, 1.0f);
 
 		color += sampleColor;
 	    }
@@ -295,7 +295,7 @@ void DeepImageUtil::ExtractMask(
 		    if(id->Get(x, y, s) != objectId)
 			continue;
 
-		    float maskValue = mask->Get(x, y, s);
+                    float maskValue = clamp(mask->Get(x, y, s), 0.0f, 1.0f);
 		    float alpha = A->Get(x,y,s);
 		    result *= 1-alpha;
 		    result += V2f(maskValue*alpha, alpha);
@@ -322,7 +322,7 @@ void DeepImageUtil::ExtractMask(
 		    if(alpha < 0.00001f)
 			continue;
 
-		    resultValue = mask->Get(x, y, s);
+		    resultValue = clamp(mask->Get(x, y, s), 0.0f, 1.0f);
 		    break;
 		}
 	    }

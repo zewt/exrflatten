@@ -439,7 +439,7 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionPattern(
 			shared_ptr<const TypedDeepImageChannel<float>> &mask =
 			    id->Get(x,y,s1) == id->Get(x2,y2,s2)? intersectionMask:strokeMask;
 			if(mask)
-			    result *= mask->Get(x,y,s1);
+			    result *= ::clamp(mask->Get(x,y,s1), 0.0f, 1.0f);
 
 			totalDifference += result;
 		    }
