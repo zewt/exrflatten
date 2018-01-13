@@ -198,9 +198,7 @@ void EXROperation_WriteLayers::Run(shared_ptr<EXROperationState> state) const
                 continue;
             }
 
-            auto maskOutImage = createOutputImage(layerName, maskDesc.maskName, false);
             auto maskOut = make_shared<SimpleImage>(image->width, image->height);
-            addLayer(maskOutImage, maskOut);
             if(maskDesc.maskType == MaskDesc::MaskType_Composited)
     		DeepImageUtil::SeparateLayer(image, collapsedId, layerDesc.objectId, maskOut, layerOrder, mask);
 	    else
@@ -210,7 +208,14 @@ void EXROperation_WriteLayers::Run(shared_ptr<EXROperationState> state) const
 		auto A = image->GetAlphaChannel();
 		DeepImageUtil::ExtractMask(useAlpha, true, mask, A, collapsedId, layerDesc.objectId, maskOut);
 	    }
-	}
+
+            // If the baked image is completely empty, don't create it.
+            if(maskOut->IsEmpty())
+                continue;
+
+            auto maskOutImage = createOutputImage(layerName, maskDesc.maskName, false);
+            addLayer(maskOutImage, maskOut);
+        }
     }
 
     // Write the layers.
