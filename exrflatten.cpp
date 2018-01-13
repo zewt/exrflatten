@@ -190,6 +190,9 @@ void Config::ParseOptions(const vector<pair<string,string>> &options)
 
 void Config::Run() const
 {
+    if(sharedConfig.inputFilenames.empty())
+        throw StringException("No input files");
+
     vector<shared_ptr<DeepImage>> images;
     for(string inputFilename: sharedConfig.inputFilenames)
     {
@@ -206,7 +209,8 @@ void Config::Run() const
 	for(auto op: operations)
 	    op->AddChannels(image, frameBuffer);
 
-	// If any channel/layer was required above that isn't in the image, warn about it.
+	// If any channel/layer was required above that isn't in the image, print
+        // an error and stop.
 	string missing = "";
 	for(auto channel: image->missingChannels)
 	{
@@ -215,7 +219,7 @@ void Config::Run() const
 	    missing += channel;
 	}
 	if(!missing.empty())
-	    printf("Warning: required input channels are missing: %s\n", missing.c_str());
+            throw StringException(ssprintf("%s: Missing input channels: %s", inputFilename.c_str(), missing.c_str()));
 
 	reader.Read(frameBuffer);
 	images.push_back(image);
