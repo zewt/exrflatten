@@ -59,17 +59,11 @@ public:
 
             if(arg == "object-id")
                 objectIds.insert(atoi(value.c_str()));
-            else if(arg == "include-mask")
-                includedMasks.insert(value);
         }
     }
 
     void AddChannels(shared_ptr<DeepImage> image, DeepFrameBuffer &frameBuffer) const
     {
-        // Request any masks we're including.
-        for(string mask_name: includedMasks)
-            image->AddChannelToFramebuffer<float>(mask_name, frameBuffer, true);
-
         image->AddChannelToFramebuffer<uint32_t>(sharedConfig.idChannel, frameBuffer, false);
     }
 
@@ -87,21 +81,6 @@ public:
             objectIds);
         layers.push_back(SimpleImage::EXRLayersToWrite(flat));
 
-        // Add any included masks.
-        for(string mask_name: includedMasks)
-        {
-            auto flat2 = DeepImageUtil::CollapseEXR(state->image,
-                nullptr,
-                state->image->GetChannel<float>(mask_name),
-                objectIds);
-
-            SimpleImage::EXRLayersToWrite layer(flat2);
-            layer.layerName = mask_name;
-
-            layer.alphaOnly = true;
-            layers.push_back(layer);
-        }
-
         SimpleImage::WriteEXR(f, layers);
     }
 
@@ -109,7 +88,6 @@ private:
     string filename;
     const SharedConfig &sharedConfig;
     set<int> objectIds;
-    set<string> includedMasks;
 };
 
 struct Config
