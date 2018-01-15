@@ -13,7 +13,7 @@ SimpleImage::SimpleImage(int width_, int height_):
 {
     width = width_;
     height = height_;
-    data.resize(width*height);
+    data.resize(width*height, V4f(0,0,0,0));
 }
 
 void SimpleImage::SetColor(V4f color)
