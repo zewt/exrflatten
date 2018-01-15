@@ -73,24 +73,24 @@ public:
     // Get all samples for the given pixel.
     const T *GetSamples(int x, int y) const
     {
-	return const_cast<TypedDeepImageChannel<T> *>(this)->GetSamples(x, y);
+        return const_cast<TypedDeepImageChannel<T> *>(this)->GetSamples(x, y);
     }
 
     T *GetSamples(int x, int y)
     {
-	return data[y][x];
+        return data[y][x];
     }
 
     char **GetSamplesBlind()
     {
-	T **p = &data[0][0];
-	return (char **) p;
+        T **p = &data[0][0];
+        return (char **) p;
     }
 
     const char * const*GetSamplesBlind() const
     {
-	const T * const*p = &data[0][0];
-	return (char **) p;
+        const T * const*p = &data[0][0];
+        return (char **) p;
     }
 
     virtual int GetBytesPerSample() const { return sizeof(T); }
@@ -98,28 +98,28 @@ public:
     // Get a sample for for the given pixel.
     const T &Get(int x, int y, int sample) const
     {
-	return const_cast<TypedDeepImageChannel<T> *>(this)->Get(x, y, sample);
+        return const_cast<TypedDeepImageChannel<T> *>(this)->Get(x, y, sample);
     }
 
     T &Get(int x, int y, int sample)
     {
-	return data[y][x][sample];
+        return data[y][x][sample];
     }
 
     // If sample is -1, return defaultValue.  Otherwise, return the actual sample value.
     T GetWithDefault(int x, int y, int sample, T defaultValue) const
     {
-	if(sample == -1)
-	    return defaultValue;
-	return Get(x, y, sample);
+        if(sample == -1)
+            return defaultValue;
+        return Get(x, y, sample);
     }
 
     // Get the last sample for a pixel.  This is useful after calling AddSample to get
     // the sample that was just added.
     T &GetLast(int x, int y)
     {
-	int last = sampleCount[y][x]-1;
-	return data[y][x][last];
+        int last = sampleCount[y][x]-1;
+        return data[y][x][last];
     }
 
     // Copy this layer and its data.
@@ -151,10 +151,10 @@ class DeepImageChannelProxy
 {
 public:
     DeepImageChannelProxy(shared_ptr<const DeepImageChannel> source, int channel_):
-	channel(channel_),
-	width(source->width),
-	height(source->height),
-	sampleCount(source->sampleCount)
+        channel(channel_),
+        width(source->width),
+        height(source->height),
+        sampleCount(source->sampleCount)
     {
     }
 
@@ -163,9 +163,9 @@ public:
     // If sample is -1, return defaultValue.  Otherwise, return the actual sample value.
     float GetWithDefault(int x, int y, int sample, float defaultValue) const
     {
-	if(sample == -1)
-	    return defaultValue;
-	return Get(x, y, sample);
+        if(sample == -1)
+            return defaultValue;
+        return Get(x, y, sample);
     }
 
     int channel = 0;
@@ -203,7 +203,7 @@ public:
     template<typename T>
     shared_ptr<const TypedDeepImageChannel<T>> GetChannel(string name) const
     {
-	return const_cast<DeepImage *>(this)->GetChannel<T>(name);
+        return const_cast<DeepImage *>(this)->GetChannel<T>(name);
     }
 
     shared_ptr<DeepImageChannelProxy> GetAlphaChannel() const;
@@ -231,20 +231,20 @@ shared_ptr<TypedDeepImageChannel<T>> DeepImage::AddChannelToFramebuffer(string c
 {
     if(channels.find(channelName) != channels.end())
     {
-	// Just return the channel we already created with this name.
-	auto result = dynamic_pointer_cast<TypedDeepImageChannel<T>>(channels.at(channelName));
-	if(result == nullptr)
-	    throw exception("A channel was added twice with different data types");
-	return result;
+        // Just return the channel we already created with this name.
+        auto result = dynamic_pointer_cast<TypedDeepImageChannel<T>>(channels.at(channelName));
+        if(result == nullptr)
+            throw exception("A channel was added twice with different data types");
+        return result;
     }
 
     vector<string> channelsInLayer = DeepImageUtil::GetChannelsInLayer(header, channelName);
     if(channelName == "rgba")
-	channelsInLayer = { "R", "G", "B", "A" };
+        channelsInLayer = { "R", "G", "B", "A" };
     if(channelsInLayer.empty())
     {
-	missingChannels.insert(channelName);
-	return nullptr;
+        missingChannels.insert(channelName);
+        return nullptr;
     }
 
     shared_ptr<TypedDeepImageChannel<T>> channel = AddChannel<T>(channelName);
@@ -252,7 +252,7 @@ shared_ptr<TypedDeepImageChannel<T>> DeepImage::AddChannelToFramebuffer(string c
 
     int idx = 0;
     for(string exrChannel: channelsInLayer)
-	channel->AddToFramebuffer(exrChannel, header, frameBuffer, idx++);
+        channel->AddToFramebuffer(exrChannel, header, frameBuffer, idx++);
     return channel;
 }
 
@@ -270,7 +270,7 @@ shared_ptr<TypedDeepImageChannel<T>> DeepImage::GetChannel(string name)
 {
     auto it = channels.find(name);
     if(it == channels.end())
-	return nullptr;
+        return nullptr;
 
     shared_ptr<DeepImageChannel> result = it->second;
     auto typedResult = dynamic_pointer_cast<TypedDeepImageChannel<T>>(result);

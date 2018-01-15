@@ -15,9 +15,9 @@ struct CreateMask
 {
     enum Mode
     {
-	CreateMaskMode_FacingAngle,
-	CreateMaskMode_Depth,
-	CreateMaskMode_Distance,
+        CreateMaskMode_FacingAngle,
+        CreateMaskMode_Depth,
+        CreateMaskMode_Distance,
     };
     Mode mode = CreateMaskMode_FacingAngle;
 

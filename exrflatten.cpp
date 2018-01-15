@@ -48,7 +48,7 @@ class EXROperation_SaveFlattenedImage: public EXROperation
 {
 public:
     EXROperation_SaveFlattenedImage(const SharedConfig &sharedConfig_, string opt, vector<pair<string,string>> args):
-	sharedConfig(sharedConfig_)
+        sharedConfig(sharedConfig_)
     {
         filename = opt;
 
@@ -69,8 +69,8 @@ public:
 
     void Run(shared_ptr<EXROperationState> state) const
     {
-	string f = sharedConfig.GetFilename(filename);
-	printf("Writing %s\n", f.c_str());
+        string f = sharedConfig.GetFilename(filename);
+        printf("Writing %s\n", f.c_str());
         vector<SimpleImage::EXRLayersToWrite> layers;
 
         // Add the main RGBA layer.
@@ -119,73 +119,73 @@ void Config::ParseOptions(const vector<pair<string,string>> &options)
     vector<pair<string,string>> accumulatedOptions;
 
     auto finalizeOp = [&] {
-	if(currentOp.empty())
-	    return;
+        if(currentOp.empty())
+            return;
 
-	string firstOption = accumulatedOptions[0].second;
-	vector<pair<string,string>> options(accumulatedOptions.begin()+1, accumulatedOptions.end());
-	auto op = Operations.at(currentOp)(sharedConfig, firstOption, options);
-	operations.push_back(op);
+        string firstOption = accumulatedOptions[0].second;
+        vector<pair<string,string>> options(accumulatedOptions.begin()+1, accumulatedOptions.end());
+        auto op = Operations.at(currentOp)(sharedConfig, firstOption, options);
+        operations.push_back(op);
 
-	accumulatedOptions.clear();
-	currentOp.clear();
+        accumulatedOptions.clear();
+        currentOp.clear();
     };
 
     for(auto it: options)
     {
-	string opt = it.first;
-	string value = it.second;
+        string opt = it.first;
+        string value = it.second;
 
-	// See if this is a global option.
-	if(sharedConfig.ParseOption(opt, value))
-	{
-	    // There are too many confusing situations if global operations can come in between
-	    // operations, so require that they come first.
-	    //
-	    // For example, if we allow specifying --output we can allow a different output directory
-	    // for each operation, but if you say
-	    // --output=output --save-layers --output=output2 --save-layers
-	    //
-	    // it's unclear whether the second --output is meant to affect the first --save-layers or
-	    // not, since normally options for an operation come after the operation, but global options
-	    // typically come before it.  This isn't useful enough for the complication.
-	    if(!currentOp.empty() || !operations.empty())
-		throw StringException("Global options must precede operations: --" + opt);
-	    continue;
-	}
+        // See if this is a global option.
+        if(sharedConfig.ParseOption(opt, value))
+        {
+            // There are too many confusing situations if global operations can come in between
+            // operations, so require that they come first.
+            //
+            // For example, if we allow specifying --output we can allow a different output directory
+            // for each operation, but if you say
+            // --output=output --save-layers --output=output2 --save-layers
+            //
+            // it's unclear whether the second --output is meant to affect the first --save-layers or
+            // not, since normally options for an operation come after the operation, but global options
+            // typically come before it.  This isn't useful enough for the complication.
+            if(!currentOp.empty() || !operations.empty())
+                throw StringException("Global options must precede operations: --" + opt);
+            continue;
+        }
 
-	// See if this is an option to create a new operation, eg. --stroke.
-	if(Operations.find(opt) != Operations.end())
-	{
-	    // This is a new operation.  Finish the previous one, creating it and passing it
-	    // any options we saw since the operation command.
-	    finalizeOp();
+        // See if this is an option to create a new operation, eg. --stroke.
+        if(Operations.find(opt) != Operations.end())
+        {
+            // This is a new operation.  Finish the previous one, creating it and passing it
+            // any options we saw since the operation command.
+            finalizeOp();
 
-	    // Save the function to create the operation.  We'll create it after we've collected
-	    // its arguments.
-	    currentOp = opt;
+            // Save the function to create the operation.  We'll create it after we've collected
+            // its arguments.
+            currentOp = opt;
 
-	    // Save the operation argument itself.  The option will be the argument when creating
-	    // the operation, eg. the 1 in --stroke=1.
-	    accumulatedOptions.emplace_back(opt, value);
-	    continue;
-	}
+            // Save the operation argument itself.  The option will be the argument when creating
+            // the operation, eg. the 1 in --stroke=1.
+            accumulatedOptions.emplace_back(opt, value);
+            continue;
+        }
 
-	// We don't know what this option is.  Add it to accumulatedOptions, so we send it
-	// with the current operation's arguments.  
-	if(currentOp.empty())
-	    printf("Unrecognized argument: %s\n", opt.c_str());
-	else
-	    accumulatedOptions.emplace_back(opt, value);
+        // We don't know what this option is.  Add it to accumulatedOptions, so we send it
+        // with the current operation's arguments.  
+        if(currentOp.empty())
+            printf("Unrecognized argument: %s\n", opt.c_str());
+        else
+            accumulatedOptions.emplace_back(opt, value);
     }
 
     // Finish creating the last op.
     finalizeOp();
 
     if(sharedConfig.inputFilenames.empty())
-	throw StringException("No input files were specified.");
+        throw StringException("No input files were specified.");
     if(operations.empty())
-	throw StringException("No operations were specified.");
+        throw StringException("No operations were specified.");
 }
 
 void Config::Run() const
@@ -196,54 +196,54 @@ void Config::Run() const
     vector<shared_ptr<DeepImage>> images;
     for(string inputFilename: sharedConfig.inputFilenames)
     {
-	DeepImageReader reader;
-	shared_ptr<DeepImage> image = reader.Open(inputFilename);
+        DeepImageReader reader;
+        shared_ptr<DeepImage> image = reader.Open(inputFilename);
 
-	// Set up the channels we're interested in.
-	DeepFrameBuffer frameBuffer;
-	image->AddSampleCountSliceToFramebuffer(frameBuffer);
-	image->AddChannelToFramebuffer<V4f>("rgba", frameBuffer, false);
-	image->AddChannelToFramebuffer<float>("Z", frameBuffer, false);
-	image->AddChannelToFramebuffer<float>("ZBack", frameBuffer, false);
+        // Set up the channels we're interested in.
+        DeepFrameBuffer frameBuffer;
+        image->AddSampleCountSliceToFramebuffer(frameBuffer);
+        image->AddChannelToFramebuffer<V4f>("rgba", frameBuffer, false);
+        image->AddChannelToFramebuffer<float>("Z", frameBuffer, false);
+        image->AddChannelToFramebuffer<float>("ZBack", frameBuffer, false);
 
-	for(auto op: operations)
-	    op->AddChannels(image, frameBuffer);
+        for(auto op: operations)
+            op->AddChannels(image, frameBuffer);
 
-	// If any channel/layer was required above that isn't in the image, print
+        // If any channel/layer was required above that isn't in the image, print
         // an error and stop.
-	string missing = "";
-	for(auto channel: image->missingChannels)
-	{
-	    if(!missing.empty())
-		missing += ", ";
-	    missing += channel;
-	}
-	if(!missing.empty())
+        string missing = "";
+        for(auto channel: image->missingChannels)
+        {
+            if(!missing.empty())
+                missing += ", ";
+            missing += channel;
+        }
+        if(!missing.empty())
             throw StringException(ssprintf("%s: Missing input channels: %s", inputFilename.c_str(), missing.c_str()));
 
-	reader.Read(frameBuffer);
-	images.push_back(image);
+        reader.Read(frameBuffer);
+        images.push_back(image);
 
-	// Work around bad Arnold channels: non-color channels get multiplied by alpha.
-	// Note that this doesn't include P, which is handled by EXROperation_FixArnold.
-	if(image->header.findTypedAttribute<StringAttribute>("arnold/version") != NULL)
-	{
-	    auto A = image->GetAlphaChannel();
-	    for(auto it: image->channels)
-	    {
-		shared_ptr<DeepImageChannel> channel = it.second;
-		if(channel->needsAlphaDivide)
-		    channel->UnpremultiplyChannel(A);
-	    }
-	}
+        // Work around bad Arnold channels: non-color channels get multiplied by alpha.
+        // Note that this doesn't include P, which is handled by EXROperation_FixArnold.
+        if(image->header.findTypedAttribute<StringAttribute>("arnold/version") != NULL)
+        {
+            auto A = image->GetAlphaChannel();
+            for(auto it: image->channels)
+            {
+                shared_ptr<DeepImageChannel> channel = it.second;
+                if(channel->needsAlphaDivide)
+                    channel->UnpremultiplyChannel(A);
+            }
+        }
     }
 
     // Combine the images.
     shared_ptr<DeepImage> image;
     if(images.size() == 1)
-	image = images[0];
+        image = images[0];
     else
-	image = DeepImageUtil::CombineImages(images);
+        image = DeepImageUtil::CombineImages(images);
 
     // Sort all samples by depth.  If we want to support volumes, this is where we'd do the rest
     // of "tidying", splitting samples where they overlap using splitVolumeSample.
@@ -254,16 +254,16 @@ void Config::Run() const
     shared_ptr<EXROperation> prevOp;
     for(auto op: operations)
     {
-	// If this op is a different type than the previous, and we have new images waiting to be
-	// merged into the main one, do so now.
-	if(prevOp && typeid(*prevOp.get()) != typeid(*op.get()) && !state->waitingImages.empty())
-	{
-	    // printf("Merging images\n");
-	    state->CombineWaitingImages();
-	}
+        // If this op is a different type than the previous, and we have new images waiting to be
+        // merged into the main one, do so now.
+        if(prevOp && typeid(*prevOp.get()) != typeid(*op.get()) && !state->waitingImages.empty())
+        {
+            // printf("Merging images\n");
+            state->CombineWaitingImages();
+        }
 
-	op->Run(state);
-	prevOp = op;
+        op->Run(state);
+        prevOp = op;
     }
 }
 
@@ -272,40 +272,54 @@ vector<pair<string,string>> GetArgs(int argc, char **argv)
     vector<pair<string,string>> results;
     for(int i = 1; i < argc; ++i)
     {
-	string option = argv[i];
-	if(option.substr(0, 2) != "--")
-	{
-	    printf("Warning: unrecognized argument %s\n", option.c_str());
-	    continue;
-	}
-	option = option.substr(2);
+        string option = argv[i];
+        if(option.substr(0, 2) != "--")
+        {
+            printf("Warning: unrecognized argument %s\n", option.c_str());
+            continue;
+        }
+        option = option.substr(2);
 
-	string argument;
-	int pos = option.find('=');
-	if(pos != string::npos)
-	{
-	    argument = option.substr(pos+1);
-	    option = option.substr(0, pos);
-	}
+        string argument;
+        int pos = option.find('=');
+        if(pos != string::npos)
+        {
+            argument = option.substr(pos+1);
+            option = option.substr(0, pos);
+        }
 
-	results.push_back(make_pair(option, argument));
+        results.push_back(make_pair(option, argument));
     }
 
     return results;
 }
 
+void CompositeOver(SimpleImage &image, shared_ptr<const SimpleImage> over)
+{
+    for(int y = 0; y < image.height; y++)
+    {
+        for(int x = 0; x < image.width; x++)
+        {
+            V4f c2 = over->GetRGBA(x, y);
+
+            V4f &c1 = image.GetRGBA(x, y);
+            c1 = (c1 * (1-c2.w)) + c2;
+        }
+    }
+}
+
 int main(int argc, char **argv)
 {
     try {
-	Config config;
-	config.ParseOptions(GetArgs(argc, argv));
-	config.operations.insert(config.operations.begin(), make_shared<EXROperation_FixArnold>());
-	config.Run();
+        Config config;
+        config.ParseOptions(GetArgs(argc, argv));
+        config.operations.insert(config.operations.begin(), make_shared<EXROperation_FixArnold>());
+        config.Run();
     }
     catch(const exception &e)
     {
-	fprintf(stderr, "%s\n", e.what());
-	return 1;
+        fprintf(stderr, "%s\n", e.what());
+        return 1;
     }
 
 

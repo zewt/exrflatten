@@ -55,8 +55,8 @@ TypedDeepImageChannel<T>::TypedDeepImageChannel(int width_, int height_, const A
 
     for(int y = 0; y < data.height(); y++)
     {
-	for(int x = 0; x < data.width(); x++)
-	    data[y][x] = new T[sampleCount[y][x]];
+        for(int x = 0; x < data.width(); x++)
+            data[y][x] = new T[sampleCount[y][x]];
     }
 }
 
@@ -67,11 +67,11 @@ TypedDeepImageChannel<T> *TypedDeepImageChannel<T>::Clone() const
 
     for(int y = 0; y < data.height(); y++)
     {
-	for(int x = 0; x < data.width(); x++)
-	{
-	    for(int s = 0; s < sampleCount[y][x]; ++s)
-		result->data[y][x][s] = data[y][x][s];
-	}
+        for(int x = 0; x < data.width(); x++)
+        {
+            for(int s = 0; s < sampleCount[y][x]; ++s)
+                result->data[y][x][s] = data[y][x][s];
+        }
     }
 
     return result;
@@ -88,12 +88,12 @@ void TypedDeepImageChannel<T>::CopySamples(shared_ptr<const DeepImageChannel> Ot
 {
     shared_ptr<const TypedDeepImageChannel<T>> TypedOtherChannel = dynamic_pointer_cast<const TypedDeepImageChannel<T>>(OtherChannel);
     if(TypedOtherChannel == nullptr)
-	return;
+        return;
 
     const T *src = TypedOtherChannel->GetSamples(x, y);
     T *dst = this->GetSamples(x, y);
     for(int s = 0; s < TypedOtherChannel->sampleCount[y][x]; ++s)
-	dst[s + firstIdx] = src[s];
+        dst[s + firstIdx] = src[s];
 }
 
 template<typename T>
@@ -101,8 +101,8 @@ TypedDeepImageChannel<T>::~TypedDeepImageChannel()
 {
     for(int y = 0; y < data.height(); y++)
     {
-	for(int x = 0; x < data.width(); x++)
-	    delete[] data[y][x];
+        for(int x = 0; x < data.width(); x++)
+            delete[] data[y][x];
     }
 }
 
@@ -129,7 +129,7 @@ void TypedDeepImageChannel<T>::AddToFramebuffer(string name, const Header &heade
     // Make sure we don't add the same channel multiple times, since the second one
     // will silently replace the first.
     if(frameBuffer.findSlice(name) != NULL)
-	throw StringException("The same EXR channel was added more than once");
+        throw StringException("The same EXR channel was added more than once");
 
     // This can happen if we add an RGB layer to something that's only reading a
     // float.  Ignore extra channels.
@@ -149,25 +149,25 @@ void TypedDeepImageChannel<T>::AddToFramebuffer(string name, const Header &heade
     Array2D<T *> *readArray;
     if(channel == 0)
     {
-	readArray = &data;
+        readArray = &data;
     }
     else
     {
-	shared_ptr<Array2D<T *>> readPointer = make_shared<Array2D<T *>>();
-	readPointer->resizeErase(data.height(),data.width());
-	for(int y = 0; y < data.height(); y++)
-	{
-	    for(int x = 0; x < data.width(); x++)
-	    {
-		char *c = (char *) data[y][x];
-		c += GetEXRElementSize<T>() * channel;
-		(*readPointer)[y][x] = (T *) c;
-	    }
-	}
+        shared_ptr<Array2D<T *>> readPointer = make_shared<Array2D<T *>>();
+        readPointer->resizeErase(data.height(),data.width());
+        for(int y = 0; y < data.height(); y++)
+        {
+            for(int x = 0; x < data.width(); x++)
+            {
+                char *c = (char *) data[y][x];
+                c += GetEXRElementSize<T>() * channel;
+                (*readPointer)[y][x] = (T *) c;
+            }
+        }
 
-	readPointers.push_back(readPointer);
+        readPointers.push_back(readPointer);
 
-	readArray = readPointer.get();
+        readArray = readPointer.get();
     }
 
     Box2i dataWindow = header.dataWindow();
@@ -186,16 +186,16 @@ void TypedDeepImageChannel<T>::UnpremultiplyChannel(shared_ptr<DeepImageChannelP
 {
     for(int y = 0; y < height; y++)
     {
-	for(int x = 0; x < width; x++)
-	{
-	    T *channelSamples = GetSamples(x, y);
-	    for(int s = 0; s < sampleCount[y][x]; ++s)
-	    {
-		float a = A->Get(x,y,s);
-		if(a > 0.00001f)
-		    channelSamples[s] = T(channelSamples[s] / a);
-	    }
-	}
+        for(int x = 0; x < width; x++)
+        {
+            T *channelSamples = GetSamples(x, y);
+            for(int s = 0; s < sampleCount[y][x]; ++s)
+            {
+                float a = A->Get(x,y,s);
+                if(a > 0.00001f)
+                    channelSamples[s] = T(channelSamples[s] / a);
+            }
+        }
     }
 }
 
@@ -215,32 +215,32 @@ namespace {
     template<typename T>
     float GetValueForChannel(const T &vec, int channel)
     {
-	return vec[channel];
+        return vec[channel];
     }
 
     float GetValueForChannel(float value, int channel)
     {
-	return value;
+        return value;
     }
 
     template<typename T>
     class DeepImageChannelProxyImpl: public DeepImageChannelProxy
     {
     public:
-	DeepImageChannelProxyImpl<T>(shared_ptr<const TypedDeepImageChannel<T>> source_, int channel_):
-	    source(source_),
-	    DeepImageChannelProxy(source_, channel_)
-	{
-	}
+        DeepImageChannelProxyImpl<T>(shared_ptr<const TypedDeepImageChannel<T>> source_, int channel_):
+            source(source_),
+            DeepImageChannelProxy(source_, channel_)
+        {
+        }
 
-	// Get a sample for for the given pixel.
-	float Get(int x, int y, int sample) const
-	{
-	    auto value = source->Get(x, y, sample);
-	    return GetValueForChannel(value, channel);
-	}
+        // Get a sample for for the given pixel.
+        float Get(int x, int y, int sample) const
+        {
+            auto value = source->Get(x, y, sample);
+            return GetValueForChannel(value, channel);
+        }
 
-	shared_ptr<const TypedDeepImageChannel<T>> source;
+        shared_ptr<const TypedDeepImageChannel<T>> source;
     };
 }
 
@@ -256,8 +256,8 @@ int DeepImage::AddSample(int x, int y)
     sampleCount[y][x]++;
     for(auto it: channels)
     {
-	shared_ptr<DeepImageChannel> channel = it.second;
-	channel->AddSample(x, y, sampleCount[y][x]);
+        shared_ptr<DeepImageChannel> channel = it.second;
+        channel->AddSample(x, y, sampleCount[y][x]);
     }
     return sampleCount[y][x] - 1;
 }
@@ -267,8 +267,8 @@ void DeepImage::AddSampleCountSliceToFramebuffer(DeepFrameBuffer &frameBuffer)
     Box2i dataWindow = header.dataWindow();
 
     frameBuffer.insertSampleCountSlice(Slice(UINT,
-	(char *) (&sampleCount[0][0] - dataWindow.min.x - dataWindow.min.y * width),
-	sizeof(unsigned int), sizeof(unsigned int) * width));
+        (char *) (&sampleCount[0][0] - dataWindow.min.x - dataWindow.min.y * width),
+        sizeof(unsigned int), sizeof(unsigned int) * width));
 }
 
 
@@ -276,9 +276,9 @@ shared_ptr<DeepImage> DeepImageReader::Open(string filename)
 {
     // First, read just the header to check that this is a deep EXR.
     {
-	auto tempFile = make_shared<InputFile>(filename.c_str());
-	int fileVersion = tempFile->version();
-	if((fileVersion & 0x800) == 0)
+        auto tempFile = make_shared<InputFile>(filename.c_str());
+        int fileVersion = tempFile->version();
+        if((fileVersion & 0x800) == 0)
             StringException("Input file is not a deep EXR.");
     }
 
