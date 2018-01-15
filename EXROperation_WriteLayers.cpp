@@ -145,29 +145,23 @@ void EXROperation_WriteLayers::Run(shared_ptr<EXROperationState> state) const
         return &outputImage->layers.back();
     };
 
-    // Separate the image into output images.
+    // Reorder the samples so we can separate it into layers.
     vector<string> maskNames;
     for(auto maskDesc: masks)
         maskNames.push_back(maskDesc.maskName);
-    shared_ptr<DeepImage> newImage = 
-        DeepImageUtil::SeparateLayers(image, collapsedId, layerOrder, maskNames);
+    shared_ptr<DeepImage> newImage = DeepImageUtil::OrderSamplesByLayer(image, collapsedId, layerOrder, maskNames);
 
+    // Separate the image into its layers.
     map<int,shared_ptr<SimpleImage>> separatedLayers;
-    shared_ptr<TypedDeepImageChannel<V4f>> rgba = newImage->GetChannel<V4f>("rgba");
-    shared_ptr<TypedDeepImageChannel<uint32_t>> id = newImage->GetChannel<uint32_t>("id");
-
-    map<int,shared_ptr<SimpleImage>> results;
+    shared_ptr<const TypedDeepImageChannel<V4f>> rgba = newImage->GetChannel<V4f>("rgba");
+    shared_ptr<const TypedDeepImageChannel<uint32_t>> id = newImage->GetChannel<uint32_t>("id");
     for(auto it: layerOrder)
     {
+        // All we need to do now is blend samples with each object ID, ignoring
+        // the others.
         int objectId = it.first;
-
         shared_ptr<SimpleImage> layerImage = make_shared<SimpleImage>(image->width, image->height);
-        separatedLayers[objectId] = DeepImageUtil::CollapseEXR(
-            newImage,
-            id,
-            rgba,
-            nullptr, // mask
-            { objectId });
+        separatedLayers[objectId] = DeepImageUtil::CollapseEXR(newImage, id, rgba, nullptr, { objectId });
     }
 
     for(auto layerDesc: layerDescsCopy)
@@ -199,7 +193,7 @@ void EXROperation_WriteLayers::Run(shared_ptr<EXROperationState> state) const
         // Create output layers for each of this color layer's masks.
         for(auto maskDesc: masks)
         {
-            auto mask = image->GetChannel<float>(maskDesc.maskChannel);
+            auto mask = newImage->GetChannel<float>(maskDesc.maskChannel);
             if(mask == nullptr)
                 continue;
 
@@ -207,21 +201,18 @@ void EXROperation_WriteLayers::Run(shared_ptr<EXROperationState> state) const
             shared_ptr<SimpleImage> maskOut;
             if(maskDesc.maskType == MaskDesc::MaskType_CompositedRGB)
             {
-                // Apply the mask to the image into maskOut.
-                maskOut = DeepImageUtil::CollapseEXR(
-                    newImage,
-                    id,
-                    rgba,
-                    mask, // mask
-                    { layerDesc.objectId });
-//                    DeepImageUtil::SeparateLayer(image, collapsedId, layerDesc.objectId, maskOut, layerOrder, mask);
+                // Apply the mask to the image into maskOut.  Use CollapseMode_Visibility
+                // when creating masks.
+                maskOut = DeepImageUtil::CollapseEXR(newImage, id, rgba, mask,
+                    { layerDesc.objectId },
+                    DeepImageUtil::CollapseMode_Visibility);
             }
             else
             {
                 // Output an alpha mask for MaskType_Alpha and MaskType_EXRLayer.
-                maskOut = make_shared<SimpleImage>(image->width, image->height);
+                maskOut = make_shared<SimpleImage>(newImage->width, newImage->height);
                 bool useAlpha = maskDesc.maskType != MaskDesc::MaskType_Greyscale;
-                auto A = image->GetAlphaChannel();
+                auto A = newImage->GetAlphaChannel();
                 DeepImageUtil::ExtractMask(useAlpha, true, mask, A, collapsedId, layerDesc.objectId, maskOut);
             }
 

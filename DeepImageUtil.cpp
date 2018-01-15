@@ -85,20 +85,30 @@ shared_ptr<SimpleImage> DeepImageUtil::CollapseEXR(
                 if(rgba)
                     color = rgba->Get(x,y,s);
 
-                if(mask)
-                    color *= clamp(mask->Get(x, y, s), 0.0f, 1.0f);
-                float alpha = color[3];
-                for(int channel = 0; channel < 4; ++channel)
+                float alpha = color.w;
+
+                if(IncludeLayer && mask)
                 {
-                    if(IncludeLayer)
-                        out[channel] = color[channel] + out[channel]*(1-alpha);
-                    else if(mode == CollapseMode_Visibility)
-                    {
-                        // This sample is excluded.  In Visibility mode, still apply
-                        // its alpha, so we make our samples less visible, and just
-                        // don't add the color.
-                        out[channel] =                  out[channel]*(1-alpha);
-                    }
+                    // When we apply C1 + (C2*C1.w), apply the mask to the first C1
+                    // term, but not to the final C1.w term.  If the mask is 0 and
+                    // alpha is 1, that means the output color should become completely
+                    // transparent, not that the sample has no effect.
+                    color *= clamp(mask->Get(x, y, s), 0.0f, 1.0f);
+                }
+
+                if(IncludeLayer)
+                {
+                    // If the mask is 0, then we still apply 1-alpha unchanged, but
+                    // we add 
+                    float maskValue = clamp(mask->Get(x, y, s), 0.0f, 1.0f);
+                    out = color + out*(1-alpha);
+                }
+                else if(mode == CollapseMode_Visibility)
+                {
+                    // This sample is excluded.  In Visibility mode, still apply
+                    // its alpha, so we make our samples less visible, and just
+                    // don't add the color.
+                    out = out*(1-alpha);
                 }
             }
         }
@@ -199,7 +209,7 @@ void DeepImageUtil::SortSamplesByDepth(shared_ptr<DeepImage> image)
  * by layerOrder.  Layers can be hidden from the bottom-up only: if you have layers [1,2,3,4],
  * you can hide 1 or 1 and 2 and get correct output, but you can't hide 3 by itself.
  */
-shared_ptr<DeepImage> DeepImageUtil::SeparateLayers(
+shared_ptr<DeepImage> DeepImageUtil::OrderSamplesByLayer(
     shared_ptr<const DeepImage> image,
     shared_ptr<const TypedDeepImageChannel<uint32_t>> id_,
     const map<int,int> &layerOrder,

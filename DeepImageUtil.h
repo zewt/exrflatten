@@ -61,8 +61,11 @@ namespace DeepImageUtil {
     // Sort samples based on the depth of each pixel, furthest from the camera first.
     void SortSamplesByDepth(shared_ptr<DeepImage> image);
 
-    /* Separate a simple composited layer from a DeepImage. */
-    shared_ptr<DeepImage> SeparateLayers(
+    // Reorder samples in an image into layerOrder, returning a new DeepImage.
+    //
+    // extraChannels is a list of channels in the image that should be reordered
+    // along with rgba.  Currently, this only supports float channels.
+    shared_ptr<DeepImage> OrderSamplesByLayer(
         shared_ptr<const DeepImage> image,
         shared_ptr<const TypedDeepImageChannel<uint32_t>> id,
         const map<int,int> &layerOrder,
