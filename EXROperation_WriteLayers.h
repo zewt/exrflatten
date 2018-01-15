@@ -56,7 +56,7 @@ private:
 
 	    // The mask will be composited with the color channel and output as a pre-masked
 	    // RGBA image.
-	    MaskType_Composited,
+	    MaskType_CompositedRGB,
 
             // The mask will be output as a luminance channel in the output EXR file.
             MaskType_EXRLayer,

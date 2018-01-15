@@ -316,7 +316,7 @@ void EXROperation_WriteLayers::MaskDesc::ParseOptionsString(string optionsString
 	else if(args[0] == "alpha")
 	    maskType = MaskType_Alpha;
 	else if(args[0] == "rgb")
-	    maskType = MaskType_Composited;
+	    maskType = MaskType_CompositedRGB;
         else if(args[0] == "exrlayer")
             maskType = MaskType_EXRLayer;
     }
