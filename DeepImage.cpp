@@ -251,7 +251,7 @@ shared_ptr<DeepImageChannelProxy> DeepImage::GetAlphaChannel() const
     return make_shared<DeepImageChannelProxyImpl<V4f>>(rgba, 3);
 }
 
-void DeepImage::AddSample(int x, int y)
+int DeepImage::AddSample(int x, int y)
 {
     sampleCount[y][x]++;
     for(auto it: channels)
@@ -259,6 +259,7 @@ void DeepImage::AddSample(int x, int y)
 	shared_ptr<DeepImageChannel> channel = it.second;
 	channel->AddSample(x, y, sampleCount[y][x]);
     }
+    return sampleCount[y][x] - 1;
 }
 
 void DeepImage::AddSampleCountSliceToFramebuffer(DeepFrameBuffer &frameBuffer)

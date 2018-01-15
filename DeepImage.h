@@ -208,8 +208,9 @@ public:
 
     shared_ptr<DeepImageChannelProxy> GetAlphaChannel() const;
     
-    // Add a sample to each channel for the given pixel.
-    void AddSample(int x, int y);
+    // Add a sample to each channel for the given pixel.  Return the sample
+    // index of the new sample.
+    int AddSample(int x, int y);
 
     // Get the number of samples for the given pixel.  All channels always have the same
     // number of samples for any given pixel.
