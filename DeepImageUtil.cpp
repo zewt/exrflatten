@@ -13,15 +13,15 @@ vector<string> DeepImageUtil::GetChannelsInLayer(const Header &header, string la
 {
     // If layerName is a channel name itself, just return it.
     if(header.channels().findChannel(layerName) != NULL)
-	return { layerName };
+        return { layerName };
 
     vector<string> result;
     ChannelList::ConstIterator start, end;
     header.channels().channelsInLayer(layerName, start, end);
     while(start != end)
     {
-	result.push_back(start.name());
-	++start;
+        result.push_back(start.name());
+        ++start;
     }
 
     // OpenEXR layers have a really silly design flaw: they don't specify the order!  We
@@ -39,69 +39,69 @@ vector<string> DeepImageUtil::GetChannelsInLayer(const Header &header, string la
     // We want to make sure both the orders "XYZ" and "YRyByA" are preserved, so make sure
     // XYZ is at the front of the list.
     static const vector<string> channelOrder = {
-	"X", "Y", "Z",
-	"R", "G", "B", /* "Y", */ "RY", "BY",
-	"A", "AR", "AG", "AB",
+        "X", "Y", "Z",
+        "R", "G", "B", /* "Y", */ "RY", "BY",
+        "A", "AR", "AG", "AB",
     };
     sort(result.begin(), result.end(), [&layerName](string lhs, string rhs) {
-	lhs = lhs.substr(layerName.size()+1); // diffuse.G -> G
-	rhs = rhs.substr(layerName.size()+1);
-	auto lhsIt = find(channelOrder.begin(), channelOrder.end(), lhs);
-	auto rhsIt = find(channelOrder.begin(), channelOrder.end(), rhs);
-	size_t lhsOrder = distance(channelOrder.begin(), lhsIt);
-	size_t rhsOrder = distance(channelOrder.begin(), rhsIt);
-	return lhsOrder < rhsOrder;
+        lhs = lhs.substr(layerName.size()+1); // diffuse.G -> G
+        rhs = rhs.substr(layerName.size()+1);
+        auto lhsIt = find(channelOrder.begin(), channelOrder.end(), lhs);
+        auto rhsIt = find(channelOrder.begin(), channelOrder.end(), rhs);
+        size_t lhsOrder = distance(channelOrder.begin(), lhsIt);
+        size_t rhsOrder = distance(channelOrder.begin(), rhsIt);
+        return lhsOrder < rhsOrder;
     });
     return result;
 }
 
 shared_ptr<SimpleImage> DeepImageUtil::CollapseEXR(
-	shared_ptr<const DeepImage> image,
+        shared_ptr<const DeepImage> image,
         shared_ptr<const TypedDeepImageChannel<uint32_t>> id,
-	shared_ptr<const TypedDeepImageChannel<V4f>> rgba,
-	shared_ptr<const TypedDeepImageChannel<float>> mask,
-	set<int> objectIds,
+        shared_ptr<const TypedDeepImageChannel<V4f>> rgba,
+        shared_ptr<const TypedDeepImageChannel<float>> mask,
+        set<int> objectIds,
         CollapseMode mode)
 {
     shared_ptr<SimpleImage> result = make_shared<SimpleImage>(image->width, image->height);
 
     for(int y = 0; y < image->height; y++)
     {
-	for(int x = 0; x < image->width; x++)
-	{
-	    V4f &out = result->GetRGBA(x, y);
-	    out = V4f(0,0,0,0);
+        for(int x = 0; x < image->width; x++)
+        {
+            V4f &out = result->GetRGBA(x, y);
+            out = V4f(0,0,0,0);
 
-	    int samples = image->NumSamples(x,y);
-	    for(int s = 0; s < samples; ++s)
-	    {
-		bool IncludeLayer = objectIds.empty() || objectIds.find(id->Get(x,y,s)) != objectIds.end();
+            int samples = image->NumSamples(x,y);
+            for(int s = 0; s < samples; ++s)
+            {
+                bool IncludeLayer = objectIds.empty() || objectIds.find(id->Get(x,y,s)) != objectIds.end();
 
                 // In CollapseMode_Normal, just ignore excluded samples entirely.
                 if(mode == CollapseMode_Normal && !IncludeLayer)
                     continue;
 
-		V4f color(1,1,1,1);
-		if(rgba)
-		    color = rgba->Get(x,y,s);
+                V4f color(1,1,1,1);
+                if(rgba)
+                    color = rgba->Get(x,y,s);
 
-		if(mask)
-		    color *= clamp(mask->Get(x, y, s), 0.0f, 1.0f);
-		float alpha = color[3];
-		for(int channel = 0; channel < 4; ++channel)
-		{
-		    if(IncludeLayer)
-			out[channel] = color[channel] + out[channel]*(1-alpha);
-		    else if(mode == CollapseMode_Visibility)
+                if(mask)
+                    color *= clamp(mask->Get(x, y, s), 0.0f, 1.0f);
+                float alpha = color[3];
+                for(int channel = 0; channel < 4; ++channel)
+                {
+                    if(IncludeLayer)
+                        out[channel] = color[channel] + out[channel]*(1-alpha);
+                    else if(mode == CollapseMode_Visibility)
                     {
                         // This sample is excluded.  In Visibility mode, still apply
                         // its alpha, so we make our samples less visible, and just
                         // don't add the color.
-			out[channel] =                  out[channel]*(1-alpha);
+                        out[channel] =                  out[channel]*(1-alpha);
                     }
-		}
-	    }
-	}
+                }
+            }
+        }
     }
 
     return result;
@@ -112,15 +112,15 @@ void DeepImageUtil::CombineObjectId(shared_ptr<TypedDeepImageChannel<uint32_t>> 
 {
     for(int y = 0; y < id->height; y++)
     {
-	for(int x = 0; x < id->width; x++)
-	{
-	    for(int s = 0; s < id->sampleCount[y][x]; ++s)
-	    {
-		uint32_t &thisId = id->Get(x,y,s);
-		if(thisId == fromObjectId)
-		    thisId = intoObjectId;
-	    }
-	}
+        for(int x = 0; x < id->width; x++)
+        {
+            for(int s = 0; s < id->sampleCount[y][x]; ++s)
+            {
+                uint32_t &thisId = id->Get(x,y,s);
+                if(thisId == fromObjectId)
+                    thisId = intoObjectId;
+            }
+        }
     }
 }
 
@@ -128,20 +128,20 @@ void DeepImageUtil::CopyLayerAttributes(const Header &input, Header &output)
 {
     for(auto it = input.begin(); it != input.end(); ++it)
     {
-	auto &attr = it.attribute();
-	string headerName = it.name();
-	if(headerName == "channels" ||
-	    headerName == "chunkCount" ||
-	    headerName == "compression" ||
-	    headerName == "lineOrder" ||
-	    headerName == "type" ||
-	    headerName == "version")
-	    continue;
+        auto &attr = it.attribute();
+        string headerName = it.name();
+        if(headerName == "channels" ||
+            headerName == "chunkCount" ||
+            headerName == "compression" ||
+            headerName == "lineOrder" ||
+            headerName == "type" ||
+            headerName == "version")
+            continue;
 
-	if(headerName.substr(0, 9) == "ObjectId/")
-	    continue;
+        if(headerName.substr(0, 9) == "ObjectId/")
+            continue;
 
-	output.insert(headerName, attr);
+        output.insert(headerName, attr);
     }
 }
 
@@ -154,31 +154,31 @@ void DeepImageUtil::SortSamplesByDepth(shared_ptr<DeepImage> image)
     vector<pair<int,int>> swaps;
     for(int y = 0; y < image->height; y++)
     {
-	for(int x = 0; x < image->width; x++)
-	{
-	    order.resize(image->sampleCount[y][x]);
-	    for(int sample = 0; sample < order.size(); ++sample)
-		order[sample] = sample;
+        for(int x = 0; x < image->width; x++)
+        {
+            order.resize(image->sampleCount[y][x]);
+            for(int sample = 0; sample < order.size(); ++sample)
+                order[sample] = sample;
 
-	    // Sort samples by depth.
-	    const float *depth = Z->GetSamples(x, y);
-	    sort(order.begin(), order.end(), [&](int lhs, int rhs)
-	    {
-		float lhsZNear = depth[lhs];
-		float rhsZNear = depth[rhs];
-		return lhsZNear > rhsZNear;
-	    });
+            // Sort samples by depth.
+            const float *depth = Z->GetSamples(x, y);
+            sort(order.begin(), order.end(), [&](int lhs, int rhs)
+            {
+                float lhsZNear = depth[lhs];
+                float rhsZNear = depth[rhs];
+                return lhsZNear > rhsZNear;
+            });
 
-	    make_swaps(order, swaps);
-	    if(swaps.empty())
-		continue;
+            make_swaps(order, swaps);
+            if(swaps.empty())
+                continue;
 
-	    for(auto it: image->channels)
-	    {
-		shared_ptr<DeepImageChannel> &channel = it.second;
-		channel->Reorder(x, y, swaps);
-	    }
-	}
+            for(auto it: image->channels)
+            {
+                shared_ptr<DeepImageChannel> &channel = it.second;
+                channel->Reorder(x, y, swaps);
+            }
+        }
     }
 }
 
@@ -337,59 +337,59 @@ void DeepImageUtil::ExtractMask(
 {
     for(int y = 0; y < A->height; y++)
     {
-	for(int x = 0; x < A->width; x++)
-	{
-	    float resultValue = 0;
-	    if(compositeAlpha)
-	    {
-		// If compositeAlpha is true, blend the mask like a color value, giving us a
-		// composited mask value and its transparency: (mask, alpha).
-		V2f result(0,0);
-		for(int s = 0; s < A->sampleCount[y][x]; ++s)
-		{
-		    if(id->Get(x, y, s) != objectId)
-			continue;
+        for(int x = 0; x < A->width; x++)
+        {
+            float resultValue = 0;
+            if(compositeAlpha)
+            {
+                // If compositeAlpha is true, blend the mask like a color value, giving us a
+                // composited mask value and its transparency: (mask, alpha).
+                V2f result(0,0);
+                for(int s = 0; s < A->sampleCount[y][x]; ++s)
+                {
+                    if(id->Get(x, y, s) != objectId)
+                        continue;
 
                     float maskValue = clamp(mask->Get(x, y, s), 0.0f, 1.0f);
-		    float alpha = A->Get(x,y,s);
-		    result *= 1-alpha;
-		    result += V2f(maskValue*alpha, alpha);
-		}
+                    float alpha = A->Get(x,y,s);
+                    result *= 1-alpha;
+                    result += V2f(maskValue*alpha, alpha);
+                }
 
-		// If the mask value for an object is 1, the mask output should be 1 even if the
-		// object is transparent, or else transparency will cause the object to be masked.
-		// If the object has alpha 0.5 and a mask of 1, we have (0.5, 0.5).  Divide out
-		// alpha to get 1.
-		if(result[1] > 0.0001f)
-		    result /= result[1];
-		resultValue = result[0];
-	    }
-	    else
-	    {
-		// If false, just find the nearest sample to the camera that isn't completely
-		// transparent.
-		for(int s = A->sampleCount[y][x]-1; s >= 0; --s)
-		{
-		    if(id->Get(x, y, s) != objectId)
-			continue;
+                // If the mask value for an object is 1, the mask output should be 1 even if the
+                // object is transparent, or else transparency will cause the object to be masked.
+                // If the object has alpha 0.5 and a mask of 1, we have (0.5, 0.5).  Divide out
+                // alpha to get 1.
+                if(result[1] > 0.0001f)
+                    result /= result[1];
+                resultValue = result[0];
+            }
+            else
+            {
+                // If false, just find the nearest sample to the camera that isn't completely
+                // transparent.
+                for(int s = A->sampleCount[y][x]-1; s >= 0; --s)
+                {
+                    if(id->Get(x, y, s) != objectId)
+                        continue;
 
-		    float alpha = A->Get(x,y,s);
-		    if(alpha < 0.00001f)
-			continue;
+                    float alpha = A->Get(x,y,s);
+                    if(alpha < 0.00001f)
+                        continue;
 
-		    resultValue = clamp(mask->Get(x, y, s), 0.0f, 1.0f);
-		    break;
-		}
-	    }
+                    resultValue = clamp(mask->Get(x, y, s), 0.0f, 1.0f);
+                    break;
+                }
+            }
 
-	    // Save the result.
-	    V4f color(0,0,0,0);
-	    if(alphaMask)
-		color = V4f(resultValue,resultValue,resultValue,resultValue);
-	    else
-		color = V4f(resultValue,resultValue,resultValue,1);
-	    layer->GetRGBA(x,y) = color;
-	}
+            // Save the result.
+            V4f color(0,0,0,0);
+            if(alphaMask)
+                color = V4f(resultValue,resultValue,resultValue,resultValue);
+            else
+                color = V4f(resultValue,resultValue,resultValue,1);
+            layer->GetRGBA(x,y) = color;
+        }
     }
 }
 
@@ -401,13 +401,13 @@ vector<float> DeepImageUtil::GetSampleVisibility(shared_ptr<const DeepImage> ima
 
     for(int s = 0; s < image->sampleCount[y][x]; ++s)
     {
-	float alpha = A->Get(x, y, s);
+        float alpha = A->Get(x, y, s);
 
-	// Apply the alpha term to each sample underneath this one.
-	for(float &sampleAlpha: result)
-	    sampleAlpha *= 1-alpha;
+        // Apply the alpha term to each sample underneath this one.
+        for(float &sampleAlpha: result)
+            sampleAlpha *= 1-alpha;
 
-	result.push_back(1.0f);
+        result.push_back(1.0f);
     }
     return result;
 }
@@ -417,23 +417,23 @@ void DeepImageUtil::GetSampleVisibilities(shared_ptr<const DeepImage> image, Arr
     SampleVisibilities.resizeErase(image->height, image->width);
     for(int y = 0; y < image->height; y++)
     {
-	for(int x = 0; x < image->width; x++)
-	    SampleVisibilities[y][x] = DeepImageUtil::GetSampleVisibility(image, x, y);
+        for(int x = 0; x < image->width; x++)
+            SampleVisibilities[y][x] = DeepImageUtil::GetSampleVisibility(image, x, y);
     }
 }
 
 namespace {
     void SumSampleCounts(Array2D<unsigned int> &totalSampleCount, const vector<shared_ptr<DeepImage>> &images)
     {
-	for(int y = 0; y < totalSampleCount.height(); y++)
-	{
-	    for(int x = 0; x < totalSampleCount.width(); x++)
-	    {
-		totalSampleCount[y][x] = 0;
-		for(auto image: images)
-		    totalSampleCount[y][x] += image->sampleCount[y][x];
-	    }
-	}
+        for(int y = 0; y < totalSampleCount.height(); y++)
+        {
+            for(int x = 0; x < totalSampleCount.width(); x++)
+            {
+                totalSampleCount[y][x] = 0;
+                for(auto image: images)
+                    totalSampleCount[y][x] += image->sampleCount[y][x];
+            }
+        }
     }
 }
 
@@ -447,59 +447,59 @@ shared_ptr<DeepImage> DeepImageUtil::CombineImages(vector<shared_ptr<DeepImage>>
 
     for(auto it: images[0]->channels)
     {
-	// Create the combined channel for the new image.  CreateSameType will create a
-	// channel of the same type as the existing channel.
-	string channelName = it.first;
-	shared_ptr<const DeepImageChannel> channel = it.second;
-	shared_ptr<DeepImageChannel> newChannel(channel->CreateSameType(result->sampleCount));
-	result->channels[channelName] = newChannel;
+        // Create the combined channel for the new image.  CreateSameType will create a
+        // channel of the same type as the existing channel.
+        string channelName = it.first;
+        shared_ptr<const DeepImageChannel> channel = it.second;
+        shared_ptr<DeepImageChannel> newChannel(channel->CreateSameType(result->sampleCount));
+        result->channels[channelName] = newChannel;
 
-	Array2D<unsigned int> sampleCountSoFar;
-	sampleCountSoFar.resizeErase(result->height, result->width);
-	memset(&sampleCountSoFar[0][0], 0, sizeof(sampleCountSoFar[0][0]) * result->height * result->width);
+        Array2D<unsigned int> sampleCountSoFar;
+        sampleCountSoFar.resizeErase(result->height, result->width);
+        memset(&sampleCountSoFar[0][0], 0, sizeof(sampleCountSoFar[0][0]) * result->height * result->width);
 
 #if 1
-	// Copy samples from each input image.  This is optimized by getting a raw pointer to
-	// the samples and copying data directly.
-	for(auto image: images)
-	{
-	    shared_ptr<const DeepImageChannel> srcChannel = map_get(image->channels, channelName, nullptr);
+        // Copy samples from each input image.  This is optimized by getting a raw pointer to
+        // the samples and copying data directly.
+        for(auto image: images)
+        {
+            shared_ptr<const DeepImageChannel> srcChannel = map_get(image->channels, channelName, nullptr);
 
-	    const char * const*srcData = srcChannel->GetSamplesBlind();
-	          char **dstData = newChannel->GetSamplesBlind();
-	    int BytesPerSample = newChannel->GetBytesPerSample();
-	    for(int y = 0; y < result->height; y++)
-	    {
-		const unsigned int *SampleCounts = image->sampleCount[y];
-		for(int x = 0; x < result->width; x++)
-		{
-		    const char *pSrc = srcData[x + y*result->width];
-		    char *pDst = dstData[x + y*result->width];
-		    pDst += sampleCountSoFar[y][x] * BytesPerSample;
-		    memcpy(pDst, pSrc, BytesPerSample*SampleCounts[x]);
+            const char * const*srcData = srcChannel->GetSamplesBlind();
+                  char **dstData = newChannel->GetSamplesBlind();
+            int BytesPerSample = newChannel->GetBytesPerSample();
+            for(int y = 0; y < result->height; y++)
+            {
+                const unsigned int *SampleCounts = image->sampleCount[y];
+                for(int x = 0; x < result->width; x++)
+                {
+                    const char *pSrc = srcData[x + y*result->width];
+                    char *pDst = dstData[x + y*result->width];
+                    pDst += sampleCountSoFar[y][x] * BytesPerSample;
+                    memcpy(pDst, pSrc, BytesPerSample*SampleCounts[x]);
 
-		    sampleCountSoFar[y][x] += SampleCounts[x];
-		}
-	    }
-	}
+                    sampleCountSoFar[y][x] += SampleCounts[x];
+                }
+            }
+        }
 #else
-	// Copy samples from each input image.
-	for(int y = 0; y < result->height; y++)
-	{
-	    for(int x = 0; x < result->width; x++)
-	    {
-		int nextSample = 0;
-		for(auto image: images)
-		{
-		    shared_ptr<const DeepImageChannel> srcChannel = map_get(image->channels, channelName, nullptr);
-		    if(srcChannel == nullptr)
-			continue;
+        // Copy samples from each input image.
+        for(int y = 0; y < result->height; y++)
+        {
+            for(int x = 0; x < result->width; x++)
+            {
+                int nextSample = 0;
+                for(auto image: images)
+                {
+                    shared_ptr<const DeepImageChannel> srcChannel = map_get(image->channels, channelName, nullptr);
+                    if(srcChannel == nullptr)
+                        continue;
 
-		    newChannel->CopySamples(srcChannel, x, y, nextSample);
-		    nextSample += image->sampleCount[y][x];
-		}
-	    }
-	}
+                    newChannel->CopySamples(srcChannel, x, y, nextSample);
+                    nextSample += image->sampleCount[y][x];
+                }
+            }
+        }
 #endif
     }
 

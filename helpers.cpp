@@ -11,24 +11,24 @@ void make_swaps(vector<int> order, vector<pair<int,int>> &swaps)
     // old list's first value.
     vector<int> inverse(order.size());
     for(int i = 0; i < order.size(); ++i)
-	inverse[order[i]] = i;
+        inverse[order[i]] = i;
 
     swaps.resize(0);
 
     for(int idx1 = 0; idx1 < order.size(); ++idx1)
     {
-	// Swap list[idx] with list[order[idx]], and record this swap.
-	int idx2 = order[idx1];
-	if(idx1 == idx2)
-	    continue;
+        // Swap list[idx] with list[order[idx]], and record this swap.
+        int idx2 = order[idx1];
+        if(idx1 == idx2)
+            continue;
 
-	swaps.push_back(make_pair(idx1, idx2));
+        swaps.push_back(make_pair(idx1, idx2));
 
-	// list[idx1] is now in the correct place, but whoever wanted the value we moved out
-	// of idx2 now needs to look in its new position.
-	int idx1_dep = inverse[idx1];
-	order[idx1_dep] = idx2;
-	inverse[idx2] = idx1_dep;
+        // list[idx1] is now in the correct place, but whoever wanted the value we moved out
+        // of idx2 now needs to look in its new position.
+        int idx1_dep = inverse[idx1];
+        order[idx1_dep] = idx2;
+        inverse[idx2] = idx1_dep;
     }
 }
 
@@ -92,39 +92,39 @@ void do_split(const S &source, const C delimitor, vector<S> &result, const bool 
     /* Short-circuit if the source is empty; we want to return an empty vector if
      * the string is empty, even if bIgnoreEmpty is true. */
     if(source.empty())
-	return;
+        return;
 
     size_t startpos = 0;
 
     do {
-	size_t pos;
-	pos = source.find(delimitor, startpos);
-	if(pos == source.npos)
-	    pos = source.size();
+        size_t pos;
+        pos = source.find(delimitor, startpos);
+        if(pos == source.npos)
+            pos = source.size();
 
-	if(pos-startpos > 0 || !ignoreEmpty)
-	{
-	    /* Optimization: if we're copying the whole string, avoid substr; this
-	     * allows this copy to be refcounted, which is much faster. */
-	    if(startpos == 0 && pos-startpos == source.size())
-		result.push_back(source);
-	    else
-	    {
-		const S Addstring = source.substr(startpos, pos-startpos);
-		result.push_back(Addstring);
-	    }
-	}
+        if(pos-startpos > 0 || !ignoreEmpty)
+        {
+            /* Optimization: if we're copying the whole string, avoid substr; this
+             * allows this copy to be refcounted, which is much faster. */
+            if(startpos == 0 && pos-startpos == source.size())
+                result.push_back(source);
+            else
+            {
+                const S Addstring = source.substr(startpos, pos-startpos);
+                result.push_back(Addstring);
+            }
+        }
 
-	startpos = pos+DelimitorLength(delimitor);
+        startpos = pos+DelimitorLength(delimitor);
     } while(startpos <= source.size());
 }
 
 void split(const string &source, const string &delimitor, vector<string> &result, const bool ignoreEmpty)
 {
     if(delimitor.size() == 1)
-	do_split(source, delimitor[0], result, ignoreEmpty);
+        do_split(source, delimitor[0], result, ignoreEmpty);
     else
-	do_split(source, delimitor, result, ignoreEmpty);
+        do_split(source, delimitor, result, ignoreEmpty);
 }
 
 /*

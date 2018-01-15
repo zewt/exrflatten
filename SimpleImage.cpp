@@ -20,8 +20,8 @@ void SimpleImage::SetColor(V4f color)
 {
     for(int y = 0; y < height; y++)
     {
-	for(int x = 0; x < width; x++)
-	    GetRGBA(x, y) = color;
+        for(int x = 0; x < width; x++)
+            GetRGBA(x, y) = color;
     }
 }
 
@@ -77,9 +77,9 @@ void SimpleImage::WriteEXR(string filename, vector<EXRLayersToWrite> layers)
 bool SimpleImage::IsEmpty() const
 {
     for(int y = 0; y < height; y++)
-	for(int x = 0; x < width; x++)
-	    if(GetRGBA(x, y)[3] > 0.0001)
-		return false;
+        for(int x = 0; x < width; x++)
+            if(GetRGBA(x, y)[3] > 0.0001)
+                return false;
 
     return true;
 }
