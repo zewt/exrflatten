@@ -195,7 +195,7 @@ public:
 
     // Add a channel with the given name.
     template<typename T>
-    shared_ptr<TypedDeepImageChannel<T>> AddChannel(string name);
+    shared_ptr<TypedDeepImageChannel<T>> AddChannel(string name, shared_ptr<TypedDeepImageChannel<T>> channel = nullptr);
 
     template<typename T>
     shared_ptr<TypedDeepImageChannel<T>> GetChannel(string name);
@@ -257,9 +257,10 @@ shared_ptr<TypedDeepImageChannel<T>> DeepImage::AddChannelToFramebuffer(string c
 }
 
 template<typename T>
-shared_ptr<TypedDeepImageChannel<T>> DeepImage::AddChannel(string name)
+shared_ptr<TypedDeepImageChannel<T>> DeepImage::AddChannel(string name, shared_ptr<TypedDeepImageChannel<T>> channel)
 {
-    auto channel = make_shared<TypedDeepImageChannel<T>>(width, height, sampleCount);
+    if(channel == nullptr)
+        channel = make_shared<TypedDeepImageChannel<T>>(width, height, sampleCount);
     channels[name] = channel;
     return channel;
 }
