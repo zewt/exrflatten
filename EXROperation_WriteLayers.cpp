@@ -10,50 +10,50 @@ EXROperation_WriteLayers::EXROperation_WriteLayers(const SharedConfig &sharedCon
 {
     for(auto it: arguments)
     {
-	string arg = it.first;
-	string value = it.second;
+        string arg = it.first;
+        string value = it.second;
 
-	if(arg == "filename-pattern")
-	{
-	    outputPattern = value;
-	}
-	else if(arg == "layer")
-	{
-	    // id=name
-	    vector<string> descParts;
-	    split(value, "=", descParts);
-	    if(descParts.size() != 2)
-	    {
-		printf("Warning: ignored part of layer desc \"%s\"\n", value.c_str());
-		continue;
-	    }
+        if(arg == "filename-pattern")
+        {
+            outputPattern = value;
+        }
+        else if(arg == "layer")
+        {
+            // id=name
+            vector<string> descParts;
+            split(value, "=", descParts);
+            if(descParts.size() != 2)
+            {
+                printf("Warning: ignored part of layer desc \"%s\"\n", value.c_str());
+                continue;
+            }
 
-	    LayerDesc layer;
-	    layer.objectId = atoi(descParts[0].c_str());
-	    layer.layerName = descParts[1];
-	    layerDescs.push_back(layer);
-	}
-	else if(arg == "layer-mask")
-	{
-	    MaskDesc mask;
-	    mask.ParseOptionsString(value);
-	    masks.push_back(mask);
-	}
-	else if(arg == "combine")
-	{
-	    const char *split = strchr(value.c_str(), ',');
-	    if(split == NULL)
-	    {
-		printf("Invalid --combine (ignored)\n");
-		continue;
-	    }
+            LayerDesc layer;
+            layer.objectId = atoi(descParts[0].c_str());
+            layer.layerName = descParts[1];
+            layerDescs.push_back(layer);
+        }
+        else if(arg == "layer-mask")
+        {
+            MaskDesc mask;
+            mask.ParseOptionsString(value);
+            masks.push_back(mask);
+        }
+        else if(arg == "combine")
+        {
+            const char *split = strchr(value.c_str(), ',');
+            if(split == NULL)
+            {
+                printf("Invalid --combine (ignored)\n");
+                continue;
+            }
 
-	    int dst = atoi(value.c_str());
-	    int src = atoi(split+1);
-	    combines.push_back(make_pair(dst, src));
-	}
-	else
-	    throw StringException("Unknown save-layers option: " + arg);
+            int dst = atoi(value.c_str());
+            int src = atoi(split+1);
+            combines.push_back(make_pair(dst, src));
+        }
+        else
+            throw StringException("Unknown save-layers option: " + arg);
     }
 }
 
@@ -74,48 +74,48 @@ void EXROperation_WriteLayers::Run(shared_ptr<EXROperationState> state) const
 
     // If no layer was specified for the default object ID, add one at the beginning.
     {
-	bool hasDefaultObjectId = false;
-	for(auto layer: layerDescsCopy)
-	    if(layer.objectId == DeepImageUtil::NO_OBJECT_ID)
-		hasDefaultObjectId = true;
+        bool hasDefaultObjectId = false;
+        for(auto layer: layerDescsCopy)
+            if(layer.objectId == DeepImageUtil::NO_OBJECT_ID)
+                hasDefaultObjectId = true;
 
-	if(!hasDefaultObjectId)
-	{
-	    LayerDesc layerDesc;
-	    layerDesc.objectId = 0;
-	    layerDesc.layerName = "default";
-	    layerDescsCopy.insert(layerDescsCopy.begin(), layerDesc);
-	}
+        if(!hasDefaultObjectId)
+        {
+            LayerDesc layerDesc;
+            layerDesc.objectId = 0;
+            layerDesc.layerName = "default";
+            layerDescsCopy.insert(layerDescsCopy.begin(), layerDesc);
+        }
     }
 
     // Create the layer ordering.  This just maps each layer's object ID to its position in
     // the layer list.
     map<int,int> layerOrder;
     {
-	int next = 0;
-	for(auto layerDesc: layerDescsCopy)
-	    layerOrder[layerDesc.objectId] = next++;
+        int next = 0;
+        for(auto layerDesc: layerDescsCopy)
+            layerOrder[layerDesc.objectId] = next++;
     }
 
     // Combine layers.  This just changes the object IDs of samples, so we don't need to re-sort.
     shared_ptr<TypedDeepImageChannel<uint32_t>> collapsedId(image->GetChannel<uint32_t>(sharedConfig.idChannel)->Clone());
     for(auto combine: combines)
-	DeepImageUtil::CombineObjectId(collapsedId, combine.second, combine.first);
+        DeepImageUtil::CombineObjectId(collapsedId, combine.second, combine.first);
 
     // Collapse any object IDs that aren't associated with layers into the default layer
     // to use with layer separation.  Do this after combines, so if we collapsed an object
     // ID into one that isn't being output, we also collapse those into NO_OBJECT_ID.
     for(int y = 0; y < image->height; y++)
     {
-	for(int x = 0; x < image->width; x++)
-	{
-	    for(int s = 0; s < image->NumSamples(x, y); ++s)
-	    {
-		uint32_t value = collapsedId->Get(x,y,s);
-		if(layerOrder.find(value) == layerOrder.end())
-		    collapsedId->Get(x,y,s) = DeepImageUtil::NO_OBJECT_ID;
-	    }
-	}
+        for(int x = 0; x < image->width; x++)
+        {
+            for(int s = 0; s < image->NumSamples(x, y); ++s)
+            {
+                uint32_t value = collapsedId->Get(x,y,s);
+                if(layerOrder.find(value) == layerOrder.end())
+                    collapsedId->Get(x,y,s) = DeepImageUtil::NO_OBJECT_ID;
+            }
+        }
     }
 
     int nextOrder = 1;
@@ -126,12 +126,12 @@ void EXROperation_WriteLayers::Run(shared_ptr<EXROperationState> state) const
         shared_ptr<OutputImage> newImage = outputImages.back();
         newImage->layerName = layerName;
         newImage->layerType = layerType;
-	if(ordered)
+        if(ordered)
             newImage->order = nextOrder++;
 
         newImage->filename = MakeOutputFilename(*newImage.get());
 
-	return newImage;
+        return newImage;
     };
 
     auto addLayer = [&](shared_ptr<OutputImage> outputImage, shared_ptr<SimpleImage> imageToAdd)
@@ -172,15 +172,15 @@ void EXROperation_WriteLayers::Run(shared_ptr<EXROperationState> state) const
 
     for(auto layerDesc: layerDescsCopy)
     {
-	// Skip this layer if we've removed it from layerOrder.
-	if(layerOrder.find(layerDesc.objectId) == layerOrder.end())
+        // Skip this layer if we've removed it from layerOrder.
+        if(layerOrder.find(layerDesc.objectId) == layerOrder.end())
         {
             // Skip this order number, so filenames stay consistent.
             nextOrder++;
             continue;
         }
 
-	string layerName = layerDesc.layerName;
+        string layerName = layerDesc.layerName;
 
         // Create an output image named "color", and extract the layer into it.
         auto colorImageOutput = separatedLayers.at(layerDesc.objectId);
@@ -197,11 +197,11 @@ void EXROperation_WriteLayers::Run(shared_ptr<EXROperationState> state) const
         addLayer(colorImageOut, colorImageOutput);
 
         // Create output layers for each of this color layer's masks.
-	for(auto maskDesc: masks)
-	{
-	    auto mask = image->GetChannel<float>(maskDesc.maskChannel);
-	    if(mask == nullptr)
-		continue;
+        for(auto maskDesc: masks)
+        {
+            auto mask = image->GetChannel<float>(maskDesc.maskChannel);
+            if(mask == nullptr)
+                continue;
 
             // Extract the mask.
             shared_ptr<SimpleImage> maskOut;
@@ -214,16 +214,16 @@ void EXROperation_WriteLayers::Run(shared_ptr<EXROperationState> state) const
                     rgba,
                     mask, // mask
                     { layerDesc.objectId });
-//    		DeepImageUtil::SeparateLayer(image, collapsedId, layerDesc.objectId, maskOut, layerOrder, mask);
+//                    DeepImageUtil::SeparateLayer(image, collapsedId, layerDesc.objectId, maskOut, layerOrder, mask);
             }
-	    else
-	    {
+            else
+            {
                 // Output an alpha mask for MaskType_Alpha and MaskType_EXRLayer.
                 maskOut = make_shared<SimpleImage>(image->width, image->height);
                 bool useAlpha = maskDesc.maskType != MaskDesc::MaskType_Greyscale;
-		auto A = image->GetAlphaChannel();
-		DeepImageUtil::ExtractMask(useAlpha, true, mask, A, collapsedId, layerDesc.objectId, maskOut);
-	    }
+                auto A = image->GetAlphaChannel();
+                DeepImageUtil::ExtractMask(useAlpha, true, mask, A, collapsedId, layerDesc.objectId, maskOut);
+            }
 
             // If the baked image is completely empty, don't create it.  As an exception,
             // we do output empty masks in MaskType_EXRLayer.
@@ -268,7 +268,7 @@ string EXROperation_WriteLayers::MakeOutputFilename(const OutputImage &layer) co
 
     string orderName = "";
     if(layer.order > 0)
-	orderName += ssprintf("#%i ", layer.order);
+        orderName += ssprintf("#%i ", layer.order);
     orderName += layer.layerName;
     outputName = subst(outputName, "<ordername>", orderName);
 
@@ -313,7 +313,7 @@ string EXROperation_WriteLayers::GetFrameNumberFromFilename(string s) const
 
     auto pos = s.rfind(".");
     if(pos == string::npos)
-	return "";
+        return "";
 
     string frameString = s.substr(pos+1);
     return frameString;
@@ -325,27 +325,27 @@ void EXROperation_WriteLayers::MaskDesc::ParseOptionsString(string optionsString
     split(optionsString, ";", options);
     for(string option: options)
     {
-	vector<string> args;
-	split(option, "=", args);
-	if(args.size() < 1)
-	    continue;
+        vector<string> args;
+        split(option, "=", args);
+        if(args.size() < 1)
+            continue;
 
-	if(args[0] == "channel" && args.size() > 1)
+        if(args[0] == "channel" && args.size() > 1)
         {
-	    maskChannel = args[1].c_str();
+            maskChannel = args[1].c_str();
 
             // If no mask name is specified, use the input channel by default.
             if(maskName.empty())
                 maskName = maskChannel;
         }
-	else if(args[0] == "name" && args.size() > 1)
-	    maskName = args[1].c_str();
-	else if(args[0] == "grey")
-	    maskType = MaskType_Greyscale;
-	else if(args[0] == "alpha")
-	    maskType = MaskType_Alpha;
-	else if(args[0] == "rgb")
-	    maskType = MaskType_CompositedRGB;
+        else if(args[0] == "name" && args.size() > 1)
+            maskName = args[1].c_str();
+        else if(args[0] == "grey")
+            maskType = MaskType_Greyscale;
+        else if(args[0] == "alpha")
+            maskType = MaskType_Alpha;
+        else if(args[0] == "rgb")
+            maskType = MaskType_CompositedRGB;
         else if(args[0] == "exrlayer")
             maskType = MaskType_EXRLayer;
     }

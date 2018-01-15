@@ -30,9 +30,9 @@ struct SharedConfig
     // Given a filename, return the path to save it.
     string GetFilename(string filename) const
     {
-	if(!outputPath.empty())
-	    filename = outputPath + "/" + filename;
-	return filename;
+        if(!outputPath.empty())
+            filename = outputPath + "/" + filename;
+        return filename;
     }
 };
 

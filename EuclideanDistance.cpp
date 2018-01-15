@@ -52,7 +52,7 @@ static void computegradient(const Array2D<float> &mask,
     float glength;
 #define SQRT2 1.4142136f
     for(j = 1; j < h-1; j++) {
-	for(i = 1; i < w-1; i++) { // Avoid edges where the kernels would spill over
+        for(i = 1; i < w-1; i++) { // Avoid edges where the kernels would spill over
             k = j*w + i;
             if((mask[j][i] > 0.0) && (mask[j][i]<1.0)) { // Compute gradient for edge pixels only
                 gx[k] =
@@ -84,7 +84,7 @@ static void computegradient(const Array2D<float> &mask,
     }
     // TODO: Compute reasonable values for gx, gy also around the image edges.
     // (These are zero now, which reduces the accuracy for a 1-pixel wide region
-	// around the image edge.) 2x2 kernels would be suitable for this.
+        // around the image edge.) 2x2 kernels would be suitable for this.
 }
 
 /*
@@ -127,7 +127,7 @@ static float edgedf(float gx, float gy, float a)
 }
 
 static float distaa3(
-	const Array2D<float> &mask,
+        const Array2D<float> &mask,
         const float *gximg, const float *gyimg, int w, int c, int xc, int yc, int xi, int yi)
 {
   float di, df, dx, dy, gx, gy, a;
@@ -592,20 +592,20 @@ shared_ptr<Array2D<EuclideanDistance::DistanceResult>> EuclideanDistance::Calcul
 
     for(int y=0; y<height; y++)
     {
-	for(int x=0; x<width; x++)
-	{
-	    int i = y*width + x;
-	    float distance = Dout[y*width+x];
+        for(int x=0; x<width; x++)
+        {
+            int i = y*width + x;
+            float distance = Dout[y*width+x];
 
-	    // Coordinates of the closest pixel:
-	    int srcX = x - xdist[i];
-	    int srcY = y - ydist[i];
+            // Coordinates of the closest pixel:
+            int srcX = x - xdist[i];
+            int srcY = y - ydist[i];
 
-	    auto &r = (*result)[y][x];
-	    r.sx = srcX;
-	    r.sy = srcY;
-	    r.distance = distance;
-	}
+            auto &r = (*result)[y][x];
+            r.sx = srcX;
+            r.sy = srcY;
+            r.distance = distance;
+        }
     }
 
     return result;
@@ -651,28 +651,28 @@ int main()
 void test()
 {
     vector<vector<float>> test = {
-	{ 0.0f, 0.0f, 0.0f, 0.0f },
-	{ 0.0f, 0.0f, 0.0, 0.0f },
-	{ 0.0f, 0.0f, 1.0, 0.0f },
-	{ 0.0f, 0.0f, 0.0, 0.0f },
+        { 0.0f, 0.0f, 0.0f, 0.0f },
+        { 0.0f, 0.0f, 0.0, 0.0f },
+        { 0.0f, 0.0f, 1.0, 0.0f },
+        { 0.0f, 0.0f, 0.0, 0.0f },
     };
     Array2D<float> out;
     out.resizeErase(test.size(), test[0].size());
 
     EuclideanDistance::Calculate(test[0].size(), test.size(),
-	[&](int x, int y) {
-	return test[y][x];
+        [&](int x, int y) {
+        return test[y][x];
     }, [&](int x, int y, int sx, int sy, float distance) {
-	out[y][x] = distance;
+        out[y][x] = distance;
     });
 
     for(int y = 0; y < test.size(); ++y)
     {
-	for(int x = 0; x < test[y].size(); ++x)
-	{
-	    printf("%.4f ", out[y][x]);
-	}
-	printf("\n");
+        for(int x = 0; x < test[y].size(); ++x)
+        {
+            printf("%.4f ", out[y][x]);
+        }
+        printf("\n");
     }
 }
 #endif

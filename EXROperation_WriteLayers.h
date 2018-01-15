@@ -24,46 +24,46 @@ private:
     // This represents a single output file.
     struct OutputImage
     {
-	string filename;
-	string layerName;
-	string layerType;
-	int order = 0;
+        string filename;
+        string layerName;
+        string layerType;
+        int order = 0;
         vector<SimpleImage::EXRLayersToWrite> layers;
 
         OutputImage()
-	{
-	}
+        {
+        }
     };
 
     struct LayerDesc
     {
-	string layerName;
-	int objectId;
+        string layerName;
+        int objectId;
     };
     vector<LayerDesc> layerDescs;
 
     struct MaskDesc
     {
-	void ParseOptionsString(string optionsString);
+        void ParseOptionsString(string optionsString);
 
-	enum MaskType
-	{
-	    // The mask value will be output on the RGB channels.
-	    MaskType_Greyscale,
+        enum MaskType
+        {
+            // The mask value will be output on the RGB channels.
+            MaskType_Greyscale,
 
-	    // The mask value will be output on the alpha channel.
-	    MaskType_Alpha,
+            // The mask value will be output on the alpha channel.
+            MaskType_Alpha,
 
-	    // The mask will be composited with the color channel and output as a pre-masked
-	    // RGBA image.
-	    MaskType_CompositedRGB,
+            // The mask will be composited with the color channel and output as a pre-masked
+            // RGBA image.
+            MaskType_CompositedRGB,
 
             // The mask will be output as a luminance channel in the output EXR file.
             MaskType_EXRLayer,
-	};
-	MaskType maskType = MaskType_Greyscale;
-	string maskChannel;
-	string maskName;
+        };
+        MaskType maskType = MaskType_Greyscale;
+        string maskChannel;
+        string maskName;
     };
     vector<MaskDesc> masks;
 
