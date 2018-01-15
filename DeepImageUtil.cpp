@@ -65,8 +65,6 @@ shared_ptr<SimpleImage> DeepImageUtil::CollapseEXR(
 {
     shared_ptr<SimpleImage> result = make_shared<SimpleImage>(image->width, image->height);
 
-    auto Z = image->GetChannel<float>("Z");
-
     for(int y = 0; y < image->height; y++)
     {
 	for(int x = 0; x < image->width; x++)
