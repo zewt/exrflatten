@@ -55,13 +55,13 @@ vector<string> DeepImageUtil::GetChannelsInLayer(const Header &header, string la
     return result;
 }
 
-// Flatten the color channels of a deep EXR to a simple flat layer.
 shared_ptr<SimpleImage> DeepImageUtil::CollapseEXR(
 	shared_ptr<const DeepImage> image,
         shared_ptr<const TypedDeepImageChannel<uint32_t>> id,
 	shared_ptr<const TypedDeepImageChannel<V4f>> rgba,
 	shared_ptr<const TypedDeepImageChannel<float>> mask,
-	set<int> objectIds)
+	set<int> objectIds,
+        CollapseMode mode)
 {
     shared_ptr<SimpleImage> result = make_shared<SimpleImage>(image->width, image->height);
 
@@ -77,20 +77,28 @@ shared_ptr<SimpleImage> DeepImageUtil::CollapseEXR(
 	    {
 		bool IncludeLayer = objectIds.empty() || objectIds.find(id->Get(x,y,s)) != objectIds.end();
 
+                // In CollapseMode_Normal, just ignore excluded samples entirely.
+                if(mode == CollapseMode_Normal && !IncludeLayer)
+                    continue;
+
 		V4f color(1,1,1,1);
 		if(rgba)
 		    color = rgba->Get(x,y,s);
 
 		if(mask)
 		    color *= clamp(mask->Get(x, y, s), 0.0f, 1.0f);
-
 		float alpha = color[3];
 		for(int channel = 0; channel < 4; ++channel)
 		{
 		    if(IncludeLayer)
 			out[channel] = color[channel] + out[channel]*(1-alpha);
-		    else
+		    else if(mode == CollapseMode_Visibility)
+                    {
+                        // This sample is excluded.  In Visibility mode, still apply
+                        // its alpha, so we make our samples less visible, and just
+                        // don't add the color.
 			out[channel] =                  out[channel]*(1-alpha);
+                    }
 		}
 	    }
 	}

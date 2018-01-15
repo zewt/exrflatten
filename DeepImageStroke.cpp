@@ -488,7 +488,8 @@ void EXROperation_Stroke::AddStroke(const DeepImageStroke::Config &config, share
 	strokeMask = DeepImageUtil::CollapseEXR(image,
             image->GetChannel<uint32_t>(sharedConfig.idChannel),
             image->GetChannel<V4f>("rgba"),
-            strokeVisibilityMask, config.objectIds);
+            strokeVisibilityMask, config.objectIds,
+            DeepImageUtil::CollapseMode_Visibility);
 
     // Create the intersection mask.  It's important that we do this before applying the stroke.
     shared_ptr<SimpleImage> intersectionPattern;
