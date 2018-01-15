@@ -62,13 +62,19 @@ namespace DeepImageUtil {
     void SortSamplesByDepth(shared_ptr<DeepImage> image);
 
     /* Separate a simple composited layer from a DeepImage. */
-    void SeparateLayer(
-	shared_ptr<const DeepImage> image,
-	shared_ptr<const TypedDeepImageChannel<uint32_t>> id,
-	int objectId,
-	shared_ptr<SimpleImage> layer,
-	const map<int,int> &layerOrder,
-	shared_ptr<const TypedDeepImageChannel<float>> mask = nullptr);
+    shared_ptr<DeepImage> SeparateLayers(
+        shared_ptr<const DeepImage> image,
+        shared_ptr<const TypedDeepImageChannel<uint32_t>> id,
+        const map<int,int> &layerOrder,
+        vector<string> extraChannels);
+
+    void SwapSamples(
+        shared_ptr<const DeepImage> image,
+        shared_ptr<TypedDeepImageChannel<Imath::V4f>> rgba,
+        shared_ptr<TypedDeepImageChannel<uint32_t>> id,
+        int x, int y,
+        int s1, int s2,
+        vector<shared_ptr<TypedDeepImageChannel<float>>> masks);
 
     // Create a layer from an object ID and a mask.
     //

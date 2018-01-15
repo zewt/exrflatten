@@ -199,82 +199,131 @@ void DeepImageUtil::SortSamplesByDepth(shared_ptr<DeepImage> image)
  * by layerOrder.  Layers can be hidden from the bottom-up only: if you have layers [1,2,3,4],
  * you can hide 1 or 1 and 2 and get correct output, but you can't hide 3 by itself.
  */
-void DeepImageUtil::SeparateLayer(
+shared_ptr<DeepImage> DeepImageUtil::SeparateLayers(
     shared_ptr<const DeepImage> image,
-    shared_ptr<const TypedDeepImageChannel<uint32_t>> id,
-    int objectId,
-    shared_ptr<SimpleImage> layer,
+    shared_ptr<const TypedDeepImageChannel<uint32_t>> id_,
     const map<int,int> &layerOrder,
-    shared_ptr<const TypedDeepImageChannel<float>> mask)
+    vector<string> extraChannels)
 {
-    auto rgba = image->GetChannel<V4f>("rgba");
+    // Create a new, empty image with the same sample count.
+    shared_ptr<DeepImage> newImage = make_shared<DeepImage>(image->width, image->height);
+    for(int y = 0; y < image->height; y++)
+        for(int x = 0; x < image->width; x++)
+            newImage->sampleCount[y][x] = image->sampleCount[y][x];
+
+    // Copy off the channels we're working with.
+    shared_ptr<TypedDeepImageChannel<V4f>> rgba(image->GetChannel<V4f>("rgba")->Clone());
+    newImage->AddChannel<V4f>("rgba", rgba);
+    shared_ptr<TypedDeepImageChannel<uint32_t>> id(id_->Clone());
+    newImage->AddChannel<uint32_t>("id", id);
+
+    vector<shared_ptr<TypedDeepImageChannel<float>>> masks;
+    for(string extraChannel: extraChannels)
+    {
+        shared_ptr<TypedDeepImageChannel<float>> mask(image->GetChannel<float>(extraChannel)->Clone());
+        masks.push_back(mask);
+        newImage->AddChannel<float>(extraChannel, mask);
+    }
 
     for(int y = 0; y < image->height; y++)
     {
-	for(int x = 0; x < image->width; x++)
-	{
-	    V4f color(0,0,0,0);
-	    for(int s = 0; s < image->NumSamples(x, y); ++s)
-	    {
-		// The layers we're creating are in a fixed order specified by the user, but
-		// the samples can be in any order.  We have samples that are supposed to be
-		// behind others, but which will actually be in the top layer.
-		//
-		// Figure out how much opacity is covering us in later layers that's actually
-		// supposed to be behind us.  If coveringAlpha is 0.25, we're being covered up
-		// by 25% in a later layer that's really behind us.
-		float coveringAlpha = 0;
-		for(int s2 = 0; s2 <= s; ++s2)
-		{
-		    float coveringAlphaSample = rgba->Get(x,y,s2)[3];
-		    int actualObjectId = id->Get(x, y, s2);
+        for(int x = 0; x < image->width; x++)
+        {
+            for(int i = 0; i < image->NumSamples(x, y)-1; ++i)
+            {
+                for(int j = 0; j < image->NumSamples(x, y)-i-1; ++j)
+                {
+                    int s1 = j;
+                    int s2 = j+1;
 
-		    // layerCmp < 0 if this sample is in an earlier layer than the one we're outputting,
-		    // layerCmp > 0 if this sample is in a later layer.
-		    // If this sample is in an earlier layer, ignore it.  If it's in a later layer,
-		    // apply it.  If it's in this layer, reduce alpha by 1-a, but don't add it.
-		    int layerCmp = layerOrder.at(actualObjectId) - layerOrder.at(objectId);
-		    if(layerCmp >= 0) // above or same
-			coveringAlpha *= 1-coveringAlphaSample;
-		    if(layerCmp > 0) // above
-			coveringAlpha += coveringAlphaSample;
-		}
+                    int objectId1 = id->Get(x, y, s1);
+                    int objectId2 = id->Get(x, y, s2);
+                    int layerOrder1 = layerOrder.at(objectId1);
+                    int layerOrder2 = layerOrder.at(objectId2);
+                    if(layerOrder1 <= layerOrder2)
+                        continue;
 
-		V4f sampleColor = rgba->Get(x,y,s);
-		const float &alpha = sampleColor[3];
-
-		// If this sample is part of this layer, composite it in.  If it's not, it still causes this
-		// color to become less visible, so apply alpha, but don't add color.
-		int layerCmp = layerOrder.at(id->Get(x, y, s)) - layerOrder.at(objectId);
-		if(layerCmp > 0)
-		    continue;
-
-		if(layerCmp < 0)
-		{
-		    // This sample is in an earlier layer (comped before this one).
-		    color *= 1-alpha;
-		    continue;
-		}
-
-		// If coveringAlpha is .5, we're being covered 50% in a later layer by
-		// things that are supposed to be behind us, so make this pixel 2x more
-		// visible.
-		if(1-coveringAlpha > 0.00001f)
-		    sampleColor /= 1-coveringAlpha;
-
-		color = color*(1-alpha);
-
-		// If we have a mask, multiply rgba by it to get a masked version.
-		if(mask != nullptr)
-		    sampleColor *= clamp(mask->Get(x, y, s), 0.0f, 1.0f);
-
-		color += sampleColor;
-	    }
-
-	    // Save the result.
-	    layer->GetRGBA(x,y) = color;
-	}
+                    SwapSamples(image,
+                        rgba,
+                        id,
+                        x, y,
+                        s1, s2,
+                        masks);
+                }
+            }
+        }
     }
+
+    return newImage;
+}
+
+// Swap two samples in an image, without changing the result of compositing
+// them in sample (not depth) order.
+//
+// The basic premise is that we have two premultiplied layers:
+//
+//    R G B   A
+// A: 1 1 0   1.0
+// B: 0 0 0.3 0.25
+//
+// When this is composited, we get
+// 
+//    0.75 0.75 0.3 1.0
+// 
+// Sample A is further away from the camera (sample B covers sample A).  Normally, you'd
+// comp A in with its 1.0 alpha, then comp B on top of it with its .25 alpha.  However,
+// we want to comp B first.  To do this, we notice that since B should be covering A by 25%
+// A needs to have an alpha of .75:
+// 
+// B: 0    0    0.3  0.25
+// A: 0.75 0.75 0    0.75
+// 
+// Now we need to adjust layer B so the result is the same as before, by multiplying by 1/.25:
+// 
+// B: 0    0    1.2  1.0
+// A: 0.75 0.75 0    0.75
+//
+// Compositing this gives the same result as the original.
+//
+// This is more complicated when more than two samples are involved and I've only
+// solved this for the two sample case.  To generalize it to sorting whole layers,
+// we bubble sort the samples, which allows us to sort them in any order while only
+// swapping adjacent entries in any one step.
+void DeepImageUtil::SwapSamples(
+    shared_ptr<const DeepImage> image,
+    shared_ptr<TypedDeepImageChannel<V4f>> rgba,
+    shared_ptr<TypedDeepImageChannel<uint32_t>> id,
+    int x, int y,
+    int s1, int s2,
+    vector<shared_ptr<TypedDeepImageChannel<float>>> masks)
+{
+    swap(id->Get(x, y, s1), id->Get(x, y, s2));
+
+    // If we have any mask, swap them too.
+    for(auto mask: masks)
+        swap(mask->Get(x, y, s1), mask->Get(x, y, s2));
+
+    const V4f origColor1 = rgba->Get(x, y, s1);
+    const V4f origColor2 = rgba->Get(x, y, s2);
+
+    // If this sample is part of this layer, composite it in.  If it's in a later
+    // layer, it still causes this color to become less visible, so apply alpha,
+    // but don't add color.
+    // [1] This sample is in an earlier layer (comped before this one).
+    // This is color that should have been comped after us.
+    V4f newColor1 = origColor1 * (1-origColor2.w);
+
+    // The amount s2 covers s1.  If this is .75, s2 covers s1 by 75%,
+    // so make s2 4x more visible when we put it underneath s1.
+    float coveringAlpha = origColor1.w * (1-origColor2.w);
+
+    V4f newColor2 = origColor2;
+    if(1-coveringAlpha > 0.00001f)
+        newColor2 /= 1-coveringAlpha;
+
+    // Store the swapped colors.
+    rgba->Get(x, y, s1) = newColor2;
+    rgba->Get(x, y, s2) = newColor1;
 }
 
 void DeepImageUtil::ExtractMask(
