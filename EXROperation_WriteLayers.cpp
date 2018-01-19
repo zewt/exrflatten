@@ -61,9 +61,12 @@ void EXROperation_WriteLayers::AddChannels(shared_ptr<DeepImage> image, DeepFram
 {
     // Add channels used by masks.
     for(auto maskDesc: masks)
-        image->AddChannelToFramebuffer<float>(maskDesc.maskChannel, frameBuffer, true);
+    {
+        auto channel = image->AddChannelToFramebuffer<float>(maskDesc.maskChannel, frameBuffer);
+        channel->needsUnpremultiply = true;
+    }
 
-    image->AddChannelToFramebuffer<uint32_t>(sharedConfig.idChannel, frameBuffer, false);
+    image->AddChannelToFramebuffer<uint32_t>(sharedConfig.idChannel, frameBuffer);
 }
 
 void EXROperation_WriteLayers::Run(shared_ptr<EXROperationState> state) const

@@ -64,7 +64,7 @@ public:
 
     void AddChannels(shared_ptr<DeepImage> image, DeepFrameBuffer &frameBuffer) const
     {
-        image->AddChannelToFramebuffer<uint32_t>(sharedConfig.idChannel, frameBuffer, false);
+        image->AddChannelToFramebuffer<uint32_t>(sharedConfig.idChannel, frameBuffer);
     }
 
     void Run(shared_ptr<EXROperationState> state) const
@@ -202,9 +202,9 @@ void Config::Run() const
         // Set up the channels we're interested in.
         DeepFrameBuffer frameBuffer;
         image->AddSampleCountSliceToFramebuffer(frameBuffer);
-        image->AddChannelToFramebuffer<V4f>("rgba", frameBuffer, false);
-        image->AddChannelToFramebuffer<float>("Z", frameBuffer, false);
-        image->AddChannelToFramebuffer<float>("ZBack", frameBuffer, false);
+        image->AddChannelToFramebuffer<V4f>("rgba", frameBuffer);
+        image->AddChannelToFramebuffer<float>("Z", frameBuffer);
+        image->AddChannelToFramebuffer<float>("ZBack", frameBuffer);
 
         for(auto op: operations)
             op->AddChannels(image, frameBuffer);
@@ -232,7 +232,7 @@ void Config::Run() const
             for(auto it: image->channels)
             {
                 shared_ptr<DeepImageChannel> channel = it.second;
-                if(channel->needsAlphaDivide)
+                if(channel->needsUnpremultiply)
                     channel->UnpremultiplyChannel(A);
             }
         }

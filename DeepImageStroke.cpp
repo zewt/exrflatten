@@ -593,19 +593,25 @@ EXROperation_Stroke::EXROperation_Stroke(const SharedConfig &sharedConfig_, stri
 
 void EXROperation_Stroke::AddChannels(shared_ptr<DeepImage> image, DeepFrameBuffer &frameBuffer) const
 {
-    image->AddChannelToFramebuffer<uint32_t>(sharedConfig.idChannel, frameBuffer, false);
+    image->AddChannelToFramebuffer<uint32_t>(sharedConfig.idChannel, frameBuffer);
 
     if(strokeDesc.strokeIntersections)
     {
         if(strokeDesc.intersectionsUseDistance)
-            image->AddChannelToFramebuffer<V3f>("P", frameBuffer, false);
+            image->AddChannelToFramebuffer<V3f>("P", frameBuffer);
         if(strokeDesc.intersectionsUseNormals)
-            image->AddChannelToFramebuffer<V3f>("N", frameBuffer, false);
+            image->AddChannelToFramebuffer<V3f>("N", frameBuffer);
     }
     if(!strokeDesc.strokeMaskChannel.empty())
-        image->AddChannelToFramebuffer<float>(strokeDesc.strokeMaskChannel, frameBuffer, true);
+    {
+        auto channel = image->AddChannelToFramebuffer<float>(strokeDesc.strokeMaskChannel, frameBuffer);
+        channel->needsUnpremultiply = true;
+    }
     if(!strokeDesc.intersectionMaskChannel.empty())
-        image->AddChannelToFramebuffer<float>(strokeDesc.intersectionMaskChannel, frameBuffer, true);
+    {
+        auto channel = image->AddChannelToFramebuffer<float>(strokeDesc.intersectionMaskChannel, frameBuffer);
+        channel->needsUnpremultiply = true;
+    }
 }
 
 

@@ -42,7 +42,7 @@ public:
     // Arnold multiplies channels by alpha that shouldn't be.  Premultiplying only makes sense for
     // color channels, but Arnold does it with world space positions and other data.  If this is
     // true, this is a channel that we need to divide by alpha to work around this problem.
-    bool needsAlphaDivide = false;
+    bool needsUnpremultiply = false;
     virtual void UnpremultiplyChannel(shared_ptr<DeepImageChannelProxy> alpha) = 0;
 
     int width, height;
@@ -188,7 +188,7 @@ public:
     // channelName is the name of the EXR channel or layer.  As a special case, the channelName
     // "rgba" reads the non-layered R, G, B and A channels as a V4f channel.
     template<typename T>
-    shared_ptr<TypedDeepImageChannel<T>> AddChannelToFramebuffer(string channelName, Imf::DeepFrameBuffer &frameBuffer, bool needsAlphaDivide);
+    shared_ptr<TypedDeepImageChannel<T>> AddChannelToFramebuffer(string channelName, Imf::DeepFrameBuffer &frameBuffer);
 
     // Set sampleCount as the sample count slice in the given framebuffer.
     void AddSampleCountSliceToFramebuffer(Imf::DeepFrameBuffer &frameBuffer);
@@ -227,7 +227,7 @@ public:
 };
 
 template<typename T>
-shared_ptr<TypedDeepImageChannel<T>> DeepImage::AddChannelToFramebuffer(string channelName, Imf::DeepFrameBuffer &frameBuffer, bool needsAlphaDivide_)
+shared_ptr<TypedDeepImageChannel<T>> DeepImage::AddChannelToFramebuffer(string channelName, Imf::DeepFrameBuffer &frameBuffer)
 {
     if(channels.find(channelName) != channels.end())
     {
@@ -248,7 +248,6 @@ shared_ptr<TypedDeepImageChannel<T>> DeepImage::AddChannelToFramebuffer(string c
     }
 
     shared_ptr<TypedDeepImageChannel<T>> channel = AddChannel<T>(channelName);
-    channel->needsAlphaDivide = needsAlphaDivide_;
 
     int idx = 0;
     for(string exrChannel: channelsInLayer)
