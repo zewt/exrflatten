@@ -94,7 +94,7 @@ void EXROperation_FixArnold::Run(shared_ptr<EXROperationState> state) const
     {
         // If the above didn't happen, then we should have much less error without dividing by
         // alpha.
-        //return;
+        return;
     }
     else
     {
