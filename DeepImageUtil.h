@@ -69,7 +69,7 @@ namespace DeepImageUtil {
         shared_ptr<const DeepImage> image,
         shared_ptr<const TypedDeepImageChannel<uint32_t>> id,
         const map<int,int> &layerOrder,
-        vector<string> extraChannels);
+        set<string> extraChannels);
 
     void SwapSamples(
         shared_ptr<const DeepImage> image,

@@ -213,7 +213,7 @@ shared_ptr<DeepImage> DeepImageUtil::OrderSamplesByLayer(
     shared_ptr<const DeepImage> image,
     shared_ptr<const TypedDeepImageChannel<uint32_t>> id_,
     const map<int,int> &layerOrder,
-    vector<string> extraChannels)
+    set<string> extraChannels)
 {
     // Create a new, empty image with the same sample count.
     shared_ptr<DeepImage> newImage = make_shared<DeepImage>(image->width, image->height);

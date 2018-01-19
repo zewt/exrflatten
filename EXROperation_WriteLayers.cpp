@@ -8,6 +8,10 @@ using namespace Imath;
 EXROperation_WriteLayers::EXROperation_WriteLayers(const SharedConfig &sharedConfig_, string opt, vector<pair<string,string>> arguments):
     sharedConfig(sharedConfig_)
 {
+    // --layer-masks specified before any other layer will be applied to all layers.
+    // Collect them here, and we'll apply them at the end.
+    vector<MaskDesc> globalMasks;
+
     for(auto it: arguments)
     {
         string arg = it.first;
@@ -37,7 +41,10 @@ EXROperation_WriteLayers::EXROperation_WriteLayers(const SharedConfig &sharedCon
         {
             MaskDesc mask;
             mask.ParseOptionsString(value);
-            masks.push_back(mask);
+            if(layerDescs.size())
+                layerDescs.back().masks.push_back(mask);
+            else
+                globalMasks.push_back(mask);
         }
         else if(arg == "combine")
         {
@@ -55,15 +62,25 @@ EXROperation_WriteLayers::EXROperation_WriteLayers(const SharedConfig &sharedCon
         else
             throw StringException("Unknown save-layers option: " + arg);
     }
+
+    // Apply global masks to all layers.
+    for(auto &maskDesc: globalMasks)
+    {
+        for(auto &layerDesc: layerDescs)
+            layerDesc.masks.push_back(maskDesc);
+    }
 }
 
 void EXROperation_WriteLayers::AddChannels(shared_ptr<DeepImage> image, DeepFrameBuffer &frameBuffer) const
 {
     // Add channels used by masks.
-    for(auto maskDesc: masks)
+    for(auto layerDesc: layerDescs)
     {
-        auto channel = image->AddChannelToFramebuffer<float>(maskDesc.maskChannel, frameBuffer);
-        channel->needsUnpremultiply = true;
+        for(auto maskDesc: layerDesc.masks)
+        {
+            auto channel = image->AddChannelToFramebuffer<float>(maskDesc.maskChannel, frameBuffer);
+            channel->needsUnpremultiply = true;
+        }
     }
 
     image->AddChannelToFramebuffer<uint32_t>(sharedConfig.idChannel, frameBuffer);
@@ -149,9 +166,10 @@ void EXROperation_WriteLayers::Run(shared_ptr<EXROperationState> state) const
     };
 
     // Reorder the samples so we can separate it into layers.
-    vector<string> maskNames;
-    for(auto maskDesc: masks)
-        maskNames.push_back(maskDesc.maskName);
+    set<string> maskNames;
+    for(auto layerDesc: layerDescs)
+        for(auto maskDesc: layerDesc.masks)
+            maskNames.insert(maskDesc.maskName);
     shared_ptr<DeepImage> newImage = DeepImageUtil::OrderSamplesByLayer(image, collapsedId, layerOrder, maskNames);
 
     // Separate the image into its layers.
@@ -194,7 +212,7 @@ void EXROperation_WriteLayers::Run(shared_ptr<EXROperationState> state) const
         addLayer(colorImageOut, colorImageOutput);
 
         // Create output layers for each of this color layer's masks.
-        for(auto maskDesc: masks)
+        for(auto maskDesc: layerDesc.masks)
         {
             auto mask = newImage->GetChannel<float>(maskDesc.maskChannel);
             if(mask == nullptr)

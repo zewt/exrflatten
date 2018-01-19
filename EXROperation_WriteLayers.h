@@ -35,13 +35,6 @@ private:
         }
     };
 
-    struct LayerDesc
-    {
-        string layerName;
-        int objectId;
-    };
-    vector<LayerDesc> layerDescs;
-
     struct MaskDesc
     {
         void ParseOptionsString(string optionsString);
@@ -65,7 +58,14 @@ private:
         string maskChannel;
         string maskName;
     };
-    vector<MaskDesc> masks;
+
+    struct LayerDesc
+    {
+        string layerName;
+        int objectId;
+        vector<MaskDesc> masks;
+    };
+    vector<LayerDesc> layerDescs;
 
     // A list of (dst, src) pairs to combine layers before writing them.
     vector<pair<int,int>> combines;
