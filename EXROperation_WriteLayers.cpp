@@ -79,6 +79,12 @@ void EXROperation_WriteLayers::AddChannels(shared_ptr<DeepImage> image, DeepFram
         for(auto maskDesc: layerDesc.masks)
         {
             auto channel = image->AddChannelToFramebuffer<float>(maskDesc.maskChannel, frameBuffer);
+
+            // Unpremultiply user masks.
+            //
+            // Note that we don't want to unpremultiply if this is a mask we created with
+            // --create-mask, but that won't happen since the unpremultiplications happen
+            // before the mask gets created.
             channel->needsUnpremultiply = true;
         }
     }
