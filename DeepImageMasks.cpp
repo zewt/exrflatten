@@ -27,21 +27,19 @@ string CreateMask::GetSrcLayer() const
 void CreateMask::AddLayers(shared_ptr<DeepImage> image, DeepFrameBuffer &frameBuffer) const
 {
     string layer = GetSrcLayer();
-    shared_ptr<DeepImageChannel> channel;
     switch(mode)
     {
     case CreateMaskMode_FacingAngle:
     case CreateMaskMode_Distance:
     {
-        channel = image->AddChannelToFramebuffer<V3f>(layer, frameBuffer);
+        image->AddChannelToFramebuffer<V3f>(layer, frameBuffer);
         break;
     }
     case CreateMaskMode_Depth:
-        channel = image->AddChannelToFramebuffer<float>(layer, frameBuffer);
+        image->AddChannelToFramebuffer<float>(layer, frameBuffer);
         break;
     }
 
-    channel->needsUnpremultiply = true;
     image->AddChannel<float>(outputChannelName);
 }
 
