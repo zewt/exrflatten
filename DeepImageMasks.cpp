@@ -171,13 +171,8 @@ shared_ptr<TypedDeepImageChannel<float>> CreateMask::CreateDistance(shared_ptr<D
         {
             for(int s = 0; s < image->NumSamples(x, y); ++s)
             {
-
                 V3f samplePos = src->Get(x,y,s);
                 float distance = (samplePos - pos).length();
-                if(x == 488 && y == 640)
-                    printf("%f %f %f, %f %f %f\n",
-                        samplePos[0], samplePos[1], samplePos[2],
-                        pos[0], pos[1], pos[2]);
                 outputMask->Get(x,y,s) = scale(distance, minValue, maxValue, 0.0f, 1.0f);
             }
         }
