@@ -44,13 +44,13 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);OpenEXR\include</IncludePath>
+    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
     <IntDir>$(SolutionDir)\build\$(Configuration)\</IntDir>
     <OutDir>bin\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);OpenEXR\include</IncludePath>
+    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
     <IntDir>$(SolutionDir)\build\$(Configuration)\</IntDir>
     <OutDir>bin\</OutDir>
   </PropertyGroup>
@@ -63,6 +63,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;_CRT_NONSTDC_NO_DEPRECATE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalOptions>/wd4018 /wd4800 /wd4267 %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <AdditionalIncludeDirectories>libs/zlib;libs/libpng;OpenEXR\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -82,6 +83,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;_CRT_NONSTDC_NO_DEPRECATE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalOptions>/wd4018 /wd4800 /wd4267 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>libs/zlib;libs/libpng;OpenEXR\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -94,6 +96,36 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="libs\libpng\png.c" />
+    <ClCompile Include="libs\libpng\pngerror.c" />
+    <ClCompile Include="libs\libpng\pngget.c" />
+    <ClCompile Include="libs\libpng\pngmem.c" />
+    <ClCompile Include="libs\libpng\pngpread.c" />
+    <ClCompile Include="libs\libpng\pngread.c" />
+    <ClCompile Include="libs\libpng\pngrio.c" />
+    <ClCompile Include="libs\libpng\pngrtran.c" />
+    <ClCompile Include="libs\libpng\pngrutil.c" />
+    <ClCompile Include="libs\libpng\pngset.c" />
+    <ClCompile Include="libs\libpng\pngtrans.c" />
+    <ClCompile Include="libs\libpng\pngwio.c" />
+    <ClCompile Include="libs\libpng\pngwrite.c" />
+    <ClCompile Include="libs\libpng\pngwtran.c" />
+    <ClCompile Include="libs\libpng\pngwutil.c" />
+    <ClCompile Include="libs\zlib\adler32.c" />
+    <ClCompile Include="libs\zlib\compress.c" />
+    <ClCompile Include="libs\zlib\crc32.c" />
+    <ClCompile Include="libs\zlib\deflate.c" />
+    <ClCompile Include="libs\zlib\gzclose.c" />
+    <ClCompile Include="libs\zlib\gzlib.c" />
+    <ClCompile Include="libs\zlib\gzread.c" />
+    <ClCompile Include="libs\zlib\gzwrite.c" />
+    <ClCompile Include="libs\zlib\infback.c" />
+    <ClCompile Include="libs\zlib\inffast.c" />
+    <ClCompile Include="libs\zlib\inflate.c" />
+    <ClCompile Include="libs\zlib\inftrees.c" />
+    <ClCompile Include="libs\zlib\trees.c" />
+    <ClCompile Include="libs\zlib\uncompr.c" />
+    <ClCompile Include="libs\zlib\zutil.c" />
     <ClCompile Include="DeepImage.cpp" />
     <ClCompile Include="DeepImageMasks.cpp" />
     <ClCompile Include="DeepImageUtil.cpp" />
@@ -108,6 +140,24 @@
     <ClCompile Include="DeepImageStroke.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="libs\libpng\png.h" />
+    <ClInclude Include="libs\libpng\pngconf.h" />
+    <ClInclude Include="libs\libpng\pngdebug.h" />
+    <ClInclude Include="libs\libpng\pnginfo.h" />
+    <ClInclude Include="libs\libpng\pnglibconf.h" />
+    <ClInclude Include="libs\libpng\pngpriv.h" />
+    <ClInclude Include="libs\libpng\pngstruct.h" />
+    <ClInclude Include="libs\zlib\crc32.h" />
+    <ClInclude Include="libs\zlib\deflate.h" />
+    <ClInclude Include="libs\zlib\gzguts.h" />
+    <ClInclude Include="libs\zlib\inffast.h" />
+    <ClInclude Include="libs\zlib\inffixed.h" />
+    <ClInclude Include="libs\zlib\inflate.h" />
+    <ClInclude Include="libs\zlib\inftrees.h" />
+    <ClInclude Include="libs\zlib\trees.h" />
+    <ClInclude Include="libs\zlib\zconf.h" />
+    <ClInclude Include="libs\zlib\zlib.h" />
+    <ClInclude Include="libs\zlib\zutil.h" />
     <ClInclude Include="DeepImage.h" />
     <ClInclude Include="DeepImageMasks.h" />
     <ClInclude Include="DeepImageUtil.h" />
