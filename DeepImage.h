@@ -238,16 +238,19 @@ shared_ptr<TypedDeepImageChannel<T>> DeepImage::AddChannelToFramebuffer(string c
         return result;
     }
 
+    shared_ptr<TypedDeepImageChannel<T>> channel = AddChannel<T>(channelName);
+
     vector<string> channelsInLayer = DeepImageUtil::GetChannelsInLayer(header, channelName);
     if(channelName == "rgba")
         channelsInLayer = { "R", "G", "B", "A" };
     if(channelsInLayer.empty())
     {
+        // The requested channel doesn't exist in the image.  Add it to missingChannels,
+        // and we'll print an error and abort.  However, still return a dummy TypedDeepImageChannel,
+        // so the caller doesn't have to check for a null return value.
         missingChannels.insert(channelName);
-        return nullptr;
+        return channel;
     }
-
-    shared_ptr<TypedDeepImageChannel<T>> channel = AddChannel<T>(channelName);
 
     int idx = 0;
     for(string exrChannel: channelsInLayer)
