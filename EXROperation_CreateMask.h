@@ -1,5 +1,5 @@
-#ifndef DeepImageMasks_h
-#define DeepImageMasks_h
+#ifndef EXROperation_CreateMask_h
+#define EXROperation_CreateMask_h
 
 #include <string>
 #include <memory>

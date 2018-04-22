@@ -127,7 +127,7 @@
     <ClCompile Include="libs\zlib\uncompr.c" />
     <ClCompile Include="libs\zlib\zutil.c" />
     <ClCompile Include="DeepImage.cpp" />
-    <ClCompile Include="DeepImageMasks.cpp" />
+    <ClCompile Include="EXROperation_CreateMask.cpp" />
     <ClCompile Include="DeepImageUtil.cpp" />
     <ClCompile Include="EuclideanDistance.cpp" />
     <ClCompile Include="exrflatten.cpp" />
@@ -159,7 +159,7 @@
     <ClInclude Include="libs\zlib\zlib.h" />
     <ClInclude Include="libs\zlib\zutil.h" />
     <ClInclude Include="DeepImage.h" />
-    <ClInclude Include="DeepImageMasks.h" />
+    <ClInclude Include="EXROperation_CreateMask.h" />
     <ClInclude Include="DeepImageUtil.h" />
     <ClInclude Include="EuclideanDistance.h" />
     <ClInclude Include="EXROperation.h" />

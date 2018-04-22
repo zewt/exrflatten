@@ -8,7 +8,6 @@
     <ClCompile Include="DeepImageUtil.cpp" />
     <ClCompile Include="SimpleImage.cpp" />
     <ClCompile Include="DeepImageStroke.cpp" />
-    <ClCompile Include="DeepImageMasks.cpp" />
     <ClCompile Include="EXROperation_WriteLayers.cpp" />
     <ClCompile Include="EXROperation.cpp" />
     <ClCompile Include="EXROperation_FixArnold.cpp" />
@@ -103,6 +102,7 @@
     <ClCompile Include="libs\zlib\zutil.c">
       <Filter>zlib</Filter>
     </ClCompile>
+    <ClCompile Include="EXROperation_CreateMask.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="exrsamples.h" />
@@ -111,7 +111,6 @@
     <ClInclude Include="DeepImageUtil.h" />
     <ClInclude Include="SimpleImage.h" />
     <ClInclude Include="DeepImageStroke.h" />
-    <ClInclude Include="DeepImageMasks.h" />
     <ClInclude Include="EXROperation.h" />
     <ClInclude Include="EXROperation_WriteLayers.h" />
     <ClInclude Include="EXROperation_FixArnold.h" />
@@ -170,6 +169,7 @@
     <ClInclude Include="libs\zlib\deflate.h">
       <Filter>zlib</Filter>
     </ClInclude>
+    <ClInclude Include="EXROperation_CreateMask.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="libpng">

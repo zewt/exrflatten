@@ -16,12 +16,12 @@
 #include <OpenEXR/Iex.h>
 
 #include "DeepImage.h"
-#include "DeepImageMasks.h"
 #include "DeepImageStroke.h"
 #include "DeepImageUtil.h"
 #include "helpers.h"
 
 #include "EXROperation.h"
+#include "EXROperation_CreateMask.h"
 #include "EXROperation_WriteLayers.h"
 #include "EXROperation_FixArnold.h"
 
