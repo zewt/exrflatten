@@ -21,6 +21,7 @@ public:
     Imf::Header header;
 
     SimpleImage(int width, int height);
+    SimpleImage(const SimpleImage &cpy);
 
     const Imath::V4f &GetRGBA(int x, int y) const { return const_cast<SimpleImage *>(this)->GetRGBA(x, y); }
 

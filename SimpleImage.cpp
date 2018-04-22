@@ -22,6 +22,14 @@ SimpleImage::SimpleImage(int width_, int height_):
     data.resize(width*height, V4f(0,0,0,0));
 }
 
+SimpleImage::SimpleImage(const SimpleImage &cpy)
+{
+    width = cpy.width;
+    height = cpy.height;
+    data = cpy.data;
+    header = cpy.header;
+}
+
 void SimpleImage::SetColor(V4f color)
 {
     for(int y = 0; y < height; y++)
