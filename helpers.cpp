@@ -189,3 +189,31 @@ float LinearToSRGB(float value)
     int idx = int(value * 65535);
     return table[idx];
 }
+
+float SRGBToLinear(float value)
+{
+    static vector<float> table;
+    if(table.empty())
+    {
+        vector<float> new_table;
+        new_table.resize(65536);
+
+        for(int i = 0; i < new_table.size(); i++)
+        {
+            float value = i / 65535.0f;
+            float output;
+            if(value <= 0.04045f)
+                output = value / 12.92f;
+            else
+                output = powf((value + 0.055f) / 1.055f, 2.4f);
+            new_table[i] = output;
+        }
+
+        table = new_table;
+    }
+
+    if(value < 0) return 0;
+    if(value > 1) return 1;
+    int idx = int(value * 65535);
+    return table[idx];
+}
