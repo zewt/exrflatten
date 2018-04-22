@@ -39,6 +39,61 @@ void SimpleImage::SetColor(V4f color)
     }
 }
 
+void SimpleImage::LinearToSRGB()
+{
+    for(int y = 0; y < height; y++)
+    {
+        for(int x = 0; x < width; ++x)
+        {
+            int offset = y*width + x;
+            float alpha = data[offset].w;
+            for(int c = 0; c < 4; ++c)
+            {
+                float value = data[offset][c];
+
+                if(c != 3)
+                {
+                    // Unpremultiply:
+                    if(alpha > 0.0001f)
+                        value /= alpha;
+
+                    value = ::LinearToSRGB(value);
+                }
+                else
+                    value = 1;
+
+                data[offset][c] = value;
+            }
+        }
+    }
+}
+
+void SimpleImage::SRGBToLinear()
+{
+    for(int y = 0; y < height; y++)
+    {
+        for(int x = 0; x < width; ++x)
+        {
+            int offset = y*width + x;
+            float alpha = data[offset].w;
+            for(int c = 0; c < 4; ++c)
+            {
+                float value = data[offset][c];
+
+                if(c != 3)
+                {
+                    // Premultiply:
+                    value *= alpha;
+
+                    value = ::SRGBToLinear(value);
+                }
+
+                data[offset][c] = value;
+            }
+        }
+    }
+}
+
 namespace {
     void WritePNG(string filename, SimpleImage::EXRLayersToWrite layer)
     {

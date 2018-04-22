@@ -33,6 +33,10 @@ public:
 
     void SetColor(Imath::V4f color);
 
+    // Convert between linear color and sRGB in-place.
+    void LinearToSRGB();
+    void SRGBToLinear();
+
     class EXRLayersToWrite
     {
     public:
