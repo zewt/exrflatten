@@ -98,9 +98,6 @@ shared_ptr<SimpleImage> DeepImageUtil::CollapseEXR(
 
                 if(IncludeLayer)
                 {
-                    // If the mask is 0, then we still apply 1-alpha unchanged, but
-                    // we add 
-                    float maskValue = clamp(mask->Get(x, y, s), 0.0f, 1.0f);
                     out = color + out*(1-alpha);
                 }
                 else if(mode == CollapseMode_Visibility)
