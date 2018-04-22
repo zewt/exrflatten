@@ -5,6 +5,12 @@
 #include <OpenEXR/ImfFrameBuffer.h>
 #include <OpenEXR/ImfOutputFile.h>
 
+#include <png.h>
+#include <zlib.h>
+
+#include <algorithm>
+using namespace std;
+
 using namespace Imf;
 using namespace Imath;
 
@@ -25,10 +31,87 @@ void SimpleImage::SetColor(V4f color)
     }
 }
 
-void SimpleImage::WriteEXR(string filename, vector<EXRLayersToWrite> layers)
+namespace {
+    void WritePNG(string filename, SimpleImage::EXRLayersToWrite layer)
+    {
+        shared_ptr<const SimpleImage> image = layer.image;
+
+        FILE *f = fopen(filename.c_str(), "wb");
+        if(!f)
+            throw StringException("Error opening output file.");
+
+        png_structp png = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+        if (!png)
+            throw StringException("Error writing output file.");
+
+        png_infop info = png_create_info_struct(png);
+        if (!info)
+            throw StringException("Error writing output file.");
+
+        if (setjmp(png_jmpbuf(png)))
+            throw StringException("Error writing output file.");
+
+        png_init_io(png, f);
+
+        // Output is 8bit depth, RGBA format.
+        png_set_IHDR(png, info, image->width, image->height, 8,
+            PNG_COLOR_TYPE_RGBA,
+            PNG_INTERLACE_NONE,
+            PNG_COMPRESSION_TYPE_DEFAULT,
+            PNG_FILTER_TYPE_DEFAULT
+        );
+        // XXX compression level for both png and exr
+        png_set_compression_level(png, Z_NO_COMPRESSION);
+        png_write_info(png, info);
+
+        // Interleave the channels and output the data.
+        vector<uint8_t> row(image->width*4, 1);
+        for(int y = 0; y < image->height; y++)
+        {
+            for(int x = 0; x < image->width; ++x)
+            {
+                int offset = y*image->width + x;
+                float alpha = image->data[offset].w;
+                for(int c = 0; c < 4; ++c)
+                {
+                    float value = image->data[offset][c];
+
+                    if(c != 3)
+                    {
+                        // Unpremultiply:
+                        if(alpha > 0.0001f)
+                            value /= alpha;
+
+                        value = LinearToSRGB(value);
+                    }
+
+                    // 32-bit -> 8-bit:
+                    uint8_t output = (uint8_t) min(max(lrintf(value * 255.0f), 0L), 255L);
+                    row[x*4+c] = output;
+                }
+            }
+            png_write_row(png, row.data());
+        }
+
+        png_write_end(png, NULL);
+
+        fclose(f);
+    }
+}
+
+void SimpleImage::WriteImages(string filename, vector<EXRLayersToWrite> layers)
 {
     if(layers.size() == 0)
         throw StringException("Can't write an image with no layers.");
+
+    if(!stricmp(getExtension(filename).c_str(), "png"))
+    {
+        if(layers.size() > 1)
+            throw StringException("Can't write a PNG with multiple layers");
+
+        WritePNG(filename, layers[0]);
+        return;
+    }
 
     // Use the first image's headers as a template.
     Header headerCopy(layers[0].image->header);

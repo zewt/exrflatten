@@ -269,7 +269,7 @@ void EXROperation_WriteLayers::Run(shared_ptr<EXROperationState> state) const
     for(const auto &outputImage: outputImages)
     {
         printf("Writing %s\n", outputImage->filename.c_str());
-        SimpleImage::WriteEXR(outputImage->filename, outputImage->layers);
+        SimpleImage::WriteImages(outputImage->filename, outputImage->layers);
     }
 }
 

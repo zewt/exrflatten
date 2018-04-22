@@ -81,7 +81,7 @@ public:
             objectIds);
         layers.push_back(SimpleImage::EXRLayersToWrite(flat));
 
-        SimpleImage::WriteEXR(f, layers);
+        SimpleImage::WriteImages(f, layers);
     }
 
 private:
@@ -224,8 +224,7 @@ void Config::Run() const
         reader.Read(frameBuffer);
         images.push_back(image);
 
-        // Work around bad Arnold channels: non-color channels get multiplied by alpha.
-        // Note that this doesn't include P, which is handled by EXROperation_FixArnold.
+        // Handle unpremultiplication.
         if(image->header.findTypedAttribute<StringAttribute>("arnold/version") != NULL)
         {
             auto A = image->GetAlphaChannel();

@@ -147,6 +147,14 @@ string basename(const string &dir)
     return dir.substr(start, end-start+1);
 }
 
+string getExtension(string path)
+{
+    auto pos = path.rfind('.');
+    if(pos == string::npos)
+        return "";
+    return path.substr(pos+1);
+}
+
 string setExtension(string path, const string &ext)
 {
     auto pos = path.rfind('.');
@@ -154,4 +162,30 @@ string setExtension(string path, const string &ext)
         path = path.substr(0, pos);
 
     return path + ext;
+}
+
+float LinearToSRGB(float value)
+{
+    static vector<float> table;
+    if(table.empty())
+    {
+        vector<float> new_table;
+        new_table.resize(65536);
+        for(int i = 0; i < new_table.size(); i++)
+        {
+            float value = i / 65535.0f;
+            float output;
+            if(value <= 0.0031308f)
+                output = value * 12.92f;
+            else
+                output = 1.055f*powf(value, 1/2.4f) - 0.055f;
+            new_table[i] = output;
+        }
+        table = new_table;
+    }
+
+    if(value < 0) return 0;
+    if(value > 1) return 1;
+    int idx = int(value * 65535);
+    return table[idx];
 }

@@ -44,8 +44,10 @@ string vssprintf(const char *fmt, va_list va);
 string ssprintf(const char *fmt, ...);
 string subst(string s, string from, string to);
 string basename(const string &dir);
+string getExtension(string path);
 string setExtension(string path, const string &ext);
 void split(const string &source, const string &delimitor, vector<string> &result, const bool ignoreEmpty=true);
+float LinearToSRGB(float value);
 
 template<typename T>
 T clamp(T value, T low, T high)

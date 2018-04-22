@@ -46,7 +46,7 @@ public:
         // If false, write RGBA.  Otherwise, write only alpha as a luminance channel (Y).
         bool alphaOnly = false;
     };
-    static void WriteEXR(string filename, vector<EXRLayersToWrite> layers);
+    static void WriteImages(string filename, vector<EXRLayersToWrite> layers);
 
     // Return true if this image is completely transparent.
     bool IsEmpty() const;
