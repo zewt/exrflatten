@@ -90,6 +90,59 @@ private:
     set<int> objectIds;
 };
 
+class EXROperation_Stats: public EXROperation
+{
+public:
+    EXROperation_Stats(const SharedConfig &sharedConfig_, string opt, vector<pair<string,string>> args):
+        sharedConfig(sharedConfig_)
+    {
+        filename = opt;
+
+        for(auto it: args)
+        {
+            string arg = it.first;
+            string value = it.second;
+
+            if(arg == "object-id")
+                objectIds.insert(atoi(value.c_str()));
+        }
+    }
+
+    void AddChannels(shared_ptr<DeepImage> image, DeepFrameBuffer &frameBuffer) const
+    {
+        image->AddChannelToFramebuffer<uint32_t>(sharedConfig.idChannel, frameBuffer);
+    }
+
+    void Run(shared_ptr<EXROperationState> state) const
+    {
+        const auto rgba = state->image->GetChannel<V4f>("rgba");
+
+        int totalSamples = 0;
+        int totalEmptyPixels = 0;
+        int totalVisiblePixels = 0;
+        for(int y = 0; y < state->image->height; y++)
+        {
+            for(int x = 0; x < state->image->width; x++)
+            {
+                int samples = state->image->NumSamples(x, y);
+                totalSamples += samples;
+                if(samples == 0)
+                    totalEmptyPixels++;
+                else
+                    totalVisiblePixels++;
+            }
+        }
+
+        printf("Average samples per pixel: %f\n", double(totalSamples) / totalVisiblePixels );
+        printf("Visible pixels: %0f%%\n", 100*(double(totalVisiblePixels) / (totalVisiblePixels+totalEmptyPixels)) );
+    }
+
+private:
+    string filename;
+    const SharedConfig &sharedConfig;
+    set<int> objectIds;
+};
+
 struct Config
 {
     void ParseOptions(const vector<pair<string,string>> &options);
@@ -111,6 +164,7 @@ static map<string, Config::CreateFunc> Operations = {
     { "create-mask", CreateOp<EXROperation_CreateMask> },
     { "stroke", CreateOp<EXROperation_Stroke> },
     { "save-flattened", CreateOp<EXROperation_SaveFlattenedImage> },
+    { "stats", CreateOp<EXROperation_Stats> },
 };
 
 void Config::ParseOptions(const vector<pair<string,string>> &options)
