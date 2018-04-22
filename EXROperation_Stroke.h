@@ -1,5 +1,5 @@
-#ifndef Stroke_H
-#define Stroke_H
+#ifndef EXROperation_Stroke_h
+#define EXROperation_Stroke_h
 
 #include <functional>
 #include <memory>

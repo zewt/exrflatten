@@ -1,7 +1,7 @@
 #define TEST_X 304
 #define TEST_Y 572
 
-#include "DeepImageStroke.h"
+#include "EXROperation_Stroke.h"
 
 #include <functional>
 #include <vector>

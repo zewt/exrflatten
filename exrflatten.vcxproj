@@ -137,7 +137,7 @@
     <ClCompile Include="exrsamples.cpp" />
     <ClCompile Include="helpers.cpp" />
     <ClCompile Include="SimpleImage.cpp" />
-    <ClCompile Include="DeepImageStroke.cpp" />
+    <ClCompile Include="EXROperation_Stroke.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="libs\libpng\png.h" />
@@ -168,7 +168,7 @@
     <ClInclude Include="exrsamples.h" />
     <ClInclude Include="helpers.h" />
     <ClInclude Include="SimpleImage.h" />
-    <ClInclude Include="DeepImageStroke.h" />
+    <ClInclude Include="EXROperation_Stroke.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
