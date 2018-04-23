@@ -59,6 +59,12 @@ namespace DeepImageUtil {
     // we shouldn't set.
     void CopyLayerAttributes(const Imf::Header &input, Imf::Header &output);
 
+    // Return worldToCamera.  If it's not present, throw an exception.
+    //
+    // If reason isn't empty, it'll be included in the exception to indicate what feature
+    // needed it.
+    Imath::M44f GetWorldToCameraMatrix(shared_ptr<const DeepImage> image, string reason="");
+
     // Sort samples based on the depth of each pixel, furthest from the camera first.
     void SortSamplesByDepth(shared_ptr<DeepImage> image);
 

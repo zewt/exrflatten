@@ -153,6 +153,20 @@ void DeepImageUtil::CopyLayerAttributes(const Header &input, Header &output)
     }
 }
 
+M44f DeepImageUtil::GetWorldToCameraMatrix(shared_ptr<const DeepImage> image, string reason="")
+{
+    auto *worldToCameraAttr = image->header.findTypedAttribute<M44fAttribute>("worldToCamera");
+    if(worldToCameraAttr == nullptr)
+    {
+        string s = "worldToCamera matrix attribute is missing";
+        if(!reason.empty())
+            s += " (required by: " + reason + ")";
+        throw exception(s.c_str());
+    }
+
+    return worldToCameraAttr->value();
+}
+
 void DeepImageUtil::SortSamplesByDepth(shared_ptr<DeepImage> image)
 {
     const auto Z = image->GetChannel<float>("Z");

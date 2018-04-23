@@ -109,13 +109,9 @@ shared_ptr<TypedDeepImageChannel<float>> CreateMask::CreateFacingAngle(shared_pt
     auto outputMask = image->AddChannel<float>(outputChannelName);
     auto src = image->GetChannel<V3f>(GetSrcLayer());
     
-    auto *worldToCameraAttr = image->header.findTypedAttribute<M44fAttribute>("worldToCamera");
-    if(worldToCameraAttr == nullptr)
-        throw exception("Can't create mask because worldToCamera matrix attribute is missing");
-
     // Get the angle to compare the normal against.  This is usually away from the camera, but
     // can be changed to get a mask for a different angle.
-    M44f worldToCamera = worldToCameraAttr->value();
+    M44f worldToCamera = DeepImageUtil::GetWorldToCameraMatrix(image, "facing angle mask creation");
     V3f towardsCamera = angle;
     if(towardsCamera == V3f(0,0,0))
         towardsCamera = V3f(0,0,-1);
@@ -245,3 +241,17 @@ void EXROperation_CreateMask::AddChannels(shared_ptr<DeepImage> image, DeepFrame
 {
     createMask.AddLayers(image, frameBuffer);
 }
+
+
+#include "EXROperation.h"
+class EXROperation_CreateCameraSpaceNormalMap: public EXROperation
+{
+public:
+    EXROperation_CreateCameraSpaceNormalMap(const SharedConfig &sharedConfig, string opt, vector<pair<string,string>> arguments);
+    void Run(shared_ptr<EXROperationState> state) const;
+    void AddChannels(shared_ptr<DeepImage> image, Imf::DeepFrameBuffer &frameBuffer) const;
+
+private:
+    string outputChannelName;
+};
+

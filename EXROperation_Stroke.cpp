@@ -199,12 +199,10 @@ void DeepImageStroke::ApplyStrokeUsingMask(const DeepImageStroke::Config &config
 // depth of 1.
 static float CalculateDepthScale(const DeepImageStroke::Config &config, shared_ptr<const DeepImage> image)
 {
+    M44f worldToCamera = DeepImageUtil::GetWorldToCameraMatrix(image, "stroke intersections");
+
     auto *worldToNDCAttr = image->header.findTypedAttribute<M44fAttribute>("worldToNDC");
     if(worldToNDCAttr == nullptr)
-        throw exception("Can't create stroke intersections because worldToNDC matrix attribute is missing");
-
-    auto *worldToCameraAttr = image->header.findTypedAttribute<M44fAttribute>("worldToCamera");
-    if(worldToCameraAttr == nullptr)
         throw exception("Can't create stroke intersections because worldToNDC matrix attribute is missing");
 
     // Note that the OpenEXR ImfStandardAttributes.h header has a completely wrong
@@ -212,7 +210,6 @@ static float CalculateDepthScale(const DeepImageStroke::Config &config, shared_p
     // with the origin in the center of the window, positive coordinates going
     // up-right, and requires perspective divide.
     M44f worldToNDC = worldToNDCAttr->value();
-    M44f worldToCamera = worldToCameraAttr->value();
     M44f cameraToWorld = worldToCamera.inverse();
 
     // One point directly in front of the camera, and a second one unit up-right.
