@@ -7,6 +7,7 @@ using namespace std;
 
 #include <OpenEXR/ImfHeader.h>
 #include <OpenEXR/ImathVec.h>
+#include <OpenEXR/ImathMatrix.h>
 
 #include "DeepImage.h"
 class SimpleImage;
@@ -130,6 +131,12 @@ namespace DeepImageUtil {
 
     // Copy all samples from all channels of images into a single image.
     shared_ptr<DeepImage> CombineImages(vector<shared_ptr<DeepImage>> images);
+
+    // Multiply each vector in a layer by a matrix.
+    void TransformNormalMap(shared_ptr<const DeepImage> image,
+        shared_ptr<const TypedDeepImageChannel<Imath::V3f>> inputChannel,
+        shared_ptr<TypedDeepImageChannel<Imath::V3f>> outputChannel,
+        Imath::M44f matrix);
 
     /* Arnold has a bug: it premultiplies a lot of EXR channels by alpha that it shouldn't.
      * Only color channels should be multiplied by alpha, but it premultiplies world space

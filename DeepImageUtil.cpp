@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <OpenEXR/ImathVec.h>
 #include <OpenEXR/ImfChannelList.h>
+#include <OpenEXR/ImfMatrixAttribute.h>
 
 using namespace Imf;
 using namespace Imath;
@@ -93,7 +94,7 @@ shared_ptr<SimpleImage> DeepImageUtil::CollapseEXR(
                     // term, but not to the final C1.w term.  If the mask is 0 and
                     // alpha is 1, that means the output color should become completely
                     // transparent, not that the sample has no effect.
-                    color *= clamp(mask->Get(x, y, s), 0.0f, 1.0f);
+                    color *= ::clamp(mask->Get(x, y, s), 0.0f, 1.0f);
                 }
 
                 if(IncludeLayer)
@@ -357,7 +358,7 @@ void DeepImageUtil::ExtractMask(
                     if(id->Get(x, y, s) != objectId)
                         continue;
 
-                    float maskValue = clamp(mask->Get(x, y, s), 0.0f, 1.0f);
+                    float maskValue = ::clamp(mask->Get(x, y, s), 0.0f, 1.0f);
                     float alpha = A->Get(x,y,s);
                     result *= 1-alpha;
                     result += V2f(maskValue*alpha, alpha);
@@ -384,7 +385,7 @@ void DeepImageUtil::ExtractMask(
                     if(alpha < 0.00001f)
                         continue;
 
-                    resultValue = clamp(mask->Get(x, y, s), 0.0f, 1.0f);
+                    resultValue = ::clamp(mask->Get(x, y, s), 0.0f, 1.0f);
                     break;
                 }
             }
@@ -511,4 +512,29 @@ shared_ptr<DeepImage> DeepImageUtil::CombineImages(vector<shared_ptr<DeepImage>>
     }
 
     return result;
+}
+
+void DeepImageUtil::TransformNormalMap(shared_ptr<const DeepImage> image,
+    shared_ptr<const TypedDeepImageChannel<V3f>> inputChannel,
+    shared_ptr<TypedDeepImageChannel<V3f>> outputChannel,
+    M44f matrix)
+{
+    for(int y = 0; y < image->height; y++)
+    {
+        for(int x = 0; x < image->width; x++)
+        {
+            for(int s = 0; s < image->NumSamples(x, y); ++s)
+            {
+                V3f vec = inputChannel->Get(x,y,s);
+
+                // We're working with normal maps, and Arnold doesn't always output normalized
+                // normals due to a bug, so normalize now.
+                vec.normalize();
+
+                V3f result;
+                matrix.multDirMatrix(vec, result);
+                outputChannel->Get(x,y,s) = result;
+            }
+        }
+    }
 }

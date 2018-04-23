@@ -6,6 +6,7 @@
 #include <memory>
 #include <OpenEXR/ImathVec.h>
 #include <OpenEXR/ImfHeader.h>
+#include <OpenEXR/ImathMatrix.h>
 
 using namespace std;
 
@@ -36,6 +37,9 @@ public:
     // Convert between linear color and sRGB in-place.
     void LinearToSRGB();
     void SRGBToLinear();
+
+    // Transform a normal map by a matrix.  The 4th channel (w) will be left unchanged.
+    void TransformNormalMap(Imath::M44f matrix);
 
     class EXRLayersToWrite
     {

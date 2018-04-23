@@ -94,6 +94,34 @@ void SimpleImage::SRGBToLinear()
     }
 }
 
+void SimpleImage::TransformNormalMap(M44f matrix)
+{
+    for(int y = 0; y < height; y++)
+    {
+        for(int x = 0; x < width; x++)
+        {
+            // This is a 3-channel vector map encoded in a 4-channel RGBA image.
+            // The alpha channel is unused and should be left unchanged.
+            V4f &value = GetRGBA(x, y);
+
+            V3f vec;
+            vec.x = value.x;
+            vec.y = value.y;
+            vec.z = value.z;
+
+            // We're working with normal maps, and Arnold doesn't always output normalized
+            // normals due to a bug, so normalize now.
+            vec.normalize();
+
+            V3f result;
+            matrix.multDirMatrix(vec, result);
+            value.x = vec.x;
+            value.y = vec.y;
+            value.z = vec.z;
+        }
+    }
+}
+
 namespace {
     void WritePNG(string filename, SimpleImage::EXRLayersToWrite layer)
     {
