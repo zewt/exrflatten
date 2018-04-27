@@ -399,7 +399,7 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionPattern(
 
                         V3f world2 = P? P->Get(x2, y2, s2):V3f(0,0,0);
                         V3f normal2 = N? N->Get(x2, y2, s2).normalized():V3f(1,0,0);
-                        float angle = acosf(normal1.dot(normal2)) * 180 / float(M_PI);
+                        float angle = acosf(::clamp(normal1.dot(normal2), -1.0f, +1.0f)) * 180 / float(M_PI);
 
                         // Find the world space distance between these two samples.
                         float distance = (world2 - world1).length();
