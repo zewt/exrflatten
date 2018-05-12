@@ -12,6 +12,10 @@ using namespace Imath;
 
 vector<string> DeepImageUtil::GetChannelsInLayer(const Header &header, string layerName)
 {
+    // As a special case, the "rgba" layer contains the R, G, B and A channels.
+    if(layerName == "rgba")
+        return { "R", "G", "B", "A" };
+
     // If layerName is a channel name itself, just return it.
     if(header.channels().findChannel(layerName) != NULL)
         return { layerName };

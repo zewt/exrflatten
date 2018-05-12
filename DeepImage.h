@@ -241,8 +241,6 @@ shared_ptr<TypedDeepImageChannel<T>> DeepImage::AddChannelToFramebuffer(string c
     shared_ptr<TypedDeepImageChannel<T>> channel = AddChannel<T>(channelName);
 
     vector<string> channelsInLayer = DeepImageUtil::GetChannelsInLayer(header, channelName);
-    if(channelName == "rgba")
-        channelsInLayer = { "R", "G", "B", "A" };
     if(channelsInLayer.empty())
     {
         // The requested channel doesn't exist in the image.  Add it to missingChannels,
@@ -290,7 +288,7 @@ public:
     void Read(const Imf::DeepFrameBuffer &frameBuffer);
 
 private:
-    shared_ptr<Imf::DeepScanLineInputFile> file;
+    shared_ptr<Imf::GenericInputFile> file;
     shared_ptr<DeepImage> image;
 };
 

@@ -1,4 +1,5 @@
 #include "DeepImage.h"
+#include "DeepImageUtil.h"
 #include <OpenEXR/ImathVec.h>
 #include <OpenEXR/ImathBox.h>
 #include <OpenEXR/ImfDeepScanLineInputFile.h>
@@ -275,38 +276,110 @@ void DeepImage::AddSampleCountSliceToFramebuffer(DeepFrameBuffer &frameBuffer)
 shared_ptr<DeepImage> DeepImageReader::Open(string filename)
 {
     // First, read just the header to check that this is a deep EXR.
-    {
-        auto tempFile = make_shared<InputFile>(filename.c_str());
-        int fileVersion = tempFile->version();
-        if((fileVersion & 0x800) == 0)
-            throw StringException("Input file is not a deep EXR.");
-    }
+    auto tempFile = make_shared<InputFile>(filename.c_str());
 
-    file = make_shared<DeepScanLineInputFile>(filename.c_str());
-
-    Box2i dataWindow = file->header().dataWindow();
+    Box2i dataWindow = tempFile->header().dataWindow();
     const int width = dataWindow.max.x - dataWindow.min.x + 1;
     const int height = dataWindow.max.y - dataWindow.min.y + 1;
 
     image = make_shared<DeepImage>(width, height);
-    image->header = file->header();
+    image->header = tempFile->header();
 
-    // Read the sample counts.  This needs to be done before we start adding channels, so we know
-    // how much space to allocate.
-    DeepFrameBuffer frameBuffer;
-    image->AddSampleCountSliceToFramebuffer(frameBuffer);
-    file->setFrameBuffer(frameBuffer);
-    file->readPixelSampleCounts(dataWindow.min.y, dataWindow.max.y);
+    int fileVersion = tempFile->version();
+    if((fileVersion & 0x800) != 0)
+    {
+        // Read a deep image.
+        auto deepFile = make_shared<DeepScanLineInputFile>(filename.c_str());
+        file = deepFile;
+
+        // Read the sample counts.  This needs to be done before we start adding channels, so we know
+        // how much space to allocate.
+        DeepFrameBuffer frameBuffer;
+        image->AddSampleCountSliceToFramebuffer(frameBuffer);
+        deepFile->setFrameBuffer(frameBuffer);
+        deepFile->readPixelSampleCounts(dataWindow.min.y, dataWindow.max.y);
+    }
+    else
+    {
+        // This is a shallow image.
+        file = make_shared<InputFile>(filename.c_str());
+
+        // Fill in sampleCount.  We always output one sample per pixel.
+        for(int y = 0; y < height; y++)
+            for(int x = 0; x < width; x++)
+                image->sampleCount[y][x] = 1;
+    }
+
     return image;
 }
 
 void DeepImageReader::Read(const DeepFrameBuffer &frameBuffer)
 {
     // Read the main image data.
-    Box2i dataWindow = file->header().dataWindow();
-    file->setFrameBuffer(frameBuffer);
-    file->readPixelSampleCounts(dataWindow.min.y, dataWindow.max.y);
-    file->readPixels(dataWindow.min.y, dataWindow.max.y);
+    shared_ptr<DeepScanLineInputFile> deepFile = dynamic_pointer_cast<DeepScanLineInputFile>(file);
+    if(deepFile)
+    {
+        Box2i dataWindow = deepFile->header().dataWindow();
+        deepFile->setFrameBuffer(frameBuffer);
+        deepFile->readPixelSampleCounts(dataWindow.min.y, dataWindow.max.y);
+        deepFile->readPixels(dataWindow.min.y, dataWindow.max.y);
+    }
+    else
+    {
+        // Read a shallow image, and convert to a one-sample deep image.
+        shared_ptr<InputFile> shallowFile = dynamic_pointer_cast<InputFile>(file);
+        assert(shallowFile);
+        
+        Box2i dataWindow = shallowFile->header().dataWindow();
+        const int width = dataWindow.max.x - dataWindow.min.x + 1;
+        const int height = dataWindow.max.y - dataWindow.min.y + 1;
+
+        FrameBuffer shallowFrameBuffer;
+
+        // Add each slice in the DeepFrameBuffer to the FrameBuffer.
+        map<string,string> buffers;
+        for(auto it = frameBuffer.begin(); it != frameBuffer.end(); ++it)
+        {
+            string sliceName = it.name();
+            const DeepSlice &deepSlice = it.slice();
+
+            int xStride = deepSlice.type == HALF? 2:4;
+            int yStride = width * xStride;
+
+            string &buf = buffers[sliceName];
+            buf.resize(yStride * height, 0);
+
+            Slice slice(deepSlice.type, (char *) buf.data(), xStride, yStride, 1, 1, 0);
+            shallowFrameBuffer.insert(sliceName, slice);
+        }
+
+        shallowFile->setFrameBuffer(shallowFrameBuffer);
+
+        // Read the image.
+        shallowFile->readPixels(dataWindow.min.y, dataWindow.max.y);
+
+        // Convert the shallow channels to shallow deep slices.  We always output one sample,
+        // even if it's completely transparent.
+        for(auto it = frameBuffer.begin(); it != frameBuffer.end(); ++it)
+        {
+            string sliceName = it.name();
+            const uint8_t *shallowChannel = (uint8_t *) buffers.at(sliceName).data();
+            const DeepSlice &deepSlice = frameBuffer[sliceName];
+
+            int xStride = deepSlice.type == HALF? 2:4;
+            int yStride = width * xStride;
+
+            for(int y = 0; y < height; y++)
+            {
+                for(int x = 0; x < width; x++)
+                {
+                    const void *inputSample = shallowChannel + y*yStride + x*xStride;
+                    char **outputSample = (char **) (deepSlice.base + (x / deepSlice.xSampling) * deepSlice.xStride + (y / deepSlice.ySampling) * deepSlice.yStride);
+                    memcpy(*outputSample, inputSample, xStride);
+                }
+            }
+        }
+    }
 
     file.reset();
     image.reset();
