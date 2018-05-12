@@ -214,7 +214,7 @@ void EXROperation_WriteLayers::Run(shared_ptr<EXROperationState> state) const
             continue;
         }
 
-        auto &colorImageOut = createOutputImage(layerName, "color", true);
+        const auto colorImageOut = createOutputImage(layerName, "color", true);
         addLayer(colorImageOut, colorImageOutput);
 
         // Create output layers for each of this color layer's masks.
