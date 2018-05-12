@@ -14,6 +14,10 @@
 using namespace std;
 class DeepImageChannelProxy;
 
+template<class T> Imf::PixelType GetEXRPixelType();
+template<class T> int GetEXRElementSize();
+template<class T> int GetEXRElementCount();
+
 // A base class for a deep image channel.  Most of the real work is in TypedDeepImageChannel.
 class DeepImageChannel
 {
@@ -38,6 +42,14 @@ public:
     // Get the number of bytes per sample.  This can be used with GetSamplesBlind() to copy sample
     // data without knowing its type.
     virtual int GetBytesPerSample() const = 0;
+
+    // Return the number of bytes per element and the number of elements.
+    // GetBytesPerSample() == GetBytesPerElement() * GetElementCount()
+    virtual int GetBytesPerElement() const = 0;
+    virtual int GetElementCount() const = 0;
+
+    // Get the EXR PixelType.
+    virtual Imf::PixelType GetPixelType() const = 0;
 
     // Arnold multiplies channels by alpha that shouldn't be.  Premultiplying only makes sense for
     // color channels, but Arnold does it with world space positions and other data.  If this is
@@ -94,6 +106,9 @@ public:
     }
 
     virtual int GetBytesPerSample() const { return sizeof(T); }
+    virtual int GetBytesPerElement() const { return GetEXRElementSize<T>(); }
+    virtual int GetElementCount() const { return GetEXRElementCount<T>(); }
+    virtual Imf::PixelType GetPixelType() const { return GetEXRPixelType<T>(); }
 
     // Get a sample for for the given pixel.
     const T &Get(int x, int y, int sample) const
@@ -206,6 +221,9 @@ public:
         return const_cast<DeepImage *>(this)->GetChannel<T>(name);
     }
 
+    // Get an untyped pointer.  This is useful when T isn't available to call GetChannel.
+    shared_ptr<DeepImageChannel> GetBaseChannel(string name);
+
     shared_ptr<DeepImageChannelProxy> GetAlphaChannel() const;
     
     // Add a sample to each channel for the given pixel.  Return the sample
@@ -268,11 +286,10 @@ shared_ptr<TypedDeepImageChannel<T>> DeepImage::AddChannel(string name, shared_p
 template<typename T>
 shared_ptr<TypedDeepImageChannel<T>> DeepImage::GetChannel(string name)
 {
-    auto it = channels.find(name);
-    if(it == channels.end())
+    shared_ptr<DeepImageChannel> result = GetBaseChannel(name);
+    if(result == nullptr)
         return nullptr;
 
-    shared_ptr<DeepImageChannel> result = it->second;
     auto typedResult = dynamic_pointer_cast<TypedDeepImageChannel<T>>(result);
     return typedResult;
 }

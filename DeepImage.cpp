@@ -272,6 +272,14 @@ void DeepImage::AddSampleCountSliceToFramebuffer(DeepFrameBuffer &frameBuffer)
         sizeof(unsigned int), sizeof(unsigned int) * width));
 }
 
+shared_ptr<DeepImageChannel> DeepImage::GetBaseChannel(string name)
+{
+    auto it = channels.find(name);
+    if(it == channels.end())
+        return nullptr;
+
+    return it->second;
+}
 
 shared_ptr<DeepImage> DeepImageReader::Open(string filename)
 {
