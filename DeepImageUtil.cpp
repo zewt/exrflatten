@@ -157,7 +157,7 @@ void DeepImageUtil::CopyLayerAttributes(const Header &input, Header &output)
     }
 }
 
-M44f DeepImageUtil::GetWorldToCameraMatrix(shared_ptr<const DeepImage> image, string reason="")
+M44f DeepImageUtil::GetWorldToCameraMatrix(shared_ptr<const DeepImage> image, string reason)
 {
     auto *worldToCameraAttr = image->header.findTypedAttribute<M44fAttribute>("worldToCamera");
     if(worldToCameraAttr == nullptr)
