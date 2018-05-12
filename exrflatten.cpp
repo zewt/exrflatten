@@ -258,7 +258,10 @@ void Config::Run() const
         image->AddSampleCountSliceToFramebuffer(frameBuffer);
         image->AddChannelToFramebuffer<V4f>("rgba", frameBuffer);
         image->AddChannelToFramebuffer<float>("Z", frameBuffer);
-        image->AddChannelToFramebuffer<float>("ZBack", frameBuffer);
+
+        // We don't actually need this right now, and it's not available for shallow renders.
+        // It'd be needed for handling volumes in deep images.
+        // image->AddChannelToFramebuffer<float>("ZBack", frameBuffer);
 
         for(auto op: operations)
             op->AddChannels(image, frameBuffer);
