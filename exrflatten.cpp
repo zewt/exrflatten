@@ -59,28 +59,31 @@ public:
 
             if(arg == "object-id")
                 objectIds.insert(atoi(value.c_str()));
+            else if(arg == "channel")
+                channel = value;
         }
     }
 
     void AddChannels(shared_ptr<DeepImage> image, DeepFrameBuffer &frameBuffer) const
     {
         image->AddChannelToFramebuffer<uint32_t>(sharedConfig.idChannel, frameBuffer);
+        image->AddChannelToFramebuffer<V4f>(channel, frameBuffer);
     }
 
     void Run(shared_ptr<EXROperationState> state) const
     {
         string f = sharedConfig.GetFilename(filename);
         printf("Writing %s\n", f.c_str());
-        vector<SimpleImage::EXRLayersToWrite> layers;
 
-        // Add the main RGBA layer.
         auto flat = DeepImageUtil::CollapseEXR(state->image,
             state->image->GetChannel<uint32_t>(sharedConfig.idChannel),
-            state->image->GetChannel<V4f>("rgba"),
+            state->image->GetChannel<V4f>(channel),
             nullptr,
             objectIds);
-        layers.push_back(SimpleImage::EXRLayersToWrite(flat));
 
+        // Add the main RGBA layer.
+        vector<SimpleImage::EXRLayersToWrite> layers;
+        layers.push_back(SimpleImage::EXRLayersToWrite(flat));
         SimpleImage::WriteImages(f, layers);
     }
 
@@ -88,6 +91,7 @@ private:
     string filename;
     const SharedConfig &sharedConfig;
     set<int> objectIds;
+    string channel = "rgba";
 };
 
 class EXROperation_Stats: public EXROperation
