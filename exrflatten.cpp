@@ -66,7 +66,7 @@ public:
 
     void AddChannels(shared_ptr<DeepImage> image, DeepFrameBuffer &frameBuffer) const
     {
-        image->AddChannelToFramebuffer<uint32_t>(sharedConfig.idChannel, frameBuffer);
+        image->AddChannelToFramebuffer<uint32_t>(sharedConfig.GetIdChannel(image->header), frameBuffer);
         image->AddChannelToFramebuffer<V4f>(channel, frameBuffer);
     }
 
@@ -76,7 +76,7 @@ public:
         printf("Writing %s\n", f.c_str());
 
         auto flat = DeepImageUtil::CollapseEXR(state->image,
-            state->image->GetChannel<uint32_t>(sharedConfig.idChannel),
+            state->image->GetChannel<uint32_t>(sharedConfig.GetIdChannel(state->image->header)),
             state->image->GetChannel<V4f>(channel),
             nullptr,
             objectIds);
@@ -114,7 +114,7 @@ public:
 
     void AddChannels(shared_ptr<DeepImage> image, DeepFrameBuffer &frameBuffer) const
     {
-        image->AddChannelToFramebuffer<uint32_t>(sharedConfig.idChannel, frameBuffer);
+        image->AddChannelToFramebuffer<uint32_t>(sharedConfig.GetIdChannel(image->header), frameBuffer);
     }
 
     void Run(shared_ptr<EXROperationState> state) const

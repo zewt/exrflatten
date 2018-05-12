@@ -9,6 +9,7 @@ using namespace std;
 class DeepImage;
 #include "helpers.h"
 
+#include <OpenEXR/ImfHeader.h>
 #include <OpenEXR/ImfDeepFrameBuffer.h>
 
 // Configuration settings shared by multiple EXROperations.  These can be specified
@@ -18,7 +19,12 @@ struct SharedConfig
 {
     string outputPath;
     vector<string> inputFilenames;
-    string idChannel = "id";
+
+    // An ID channel specified with --id.  Use GetIdChannel to get the actual
+    // ID channel to use.
+    string explicitIdChannel = "";
+
+    string GetIdChannel(const Imf::Header &header) const;
 
     // Tunable distance values are in cm.  This can be used to adjust all distances for
     // scenes with a different scale.  If you're in meters, this should be 100, to indicate

@@ -38,7 +38,7 @@ void DeepImageStroke::ApplyStrokeUsingMask(const DeepImageStroke::Config &config
     shared_ptr<const DeepImage> image, shared_ptr<DeepImage> outputImage, shared_ptr<SimpleImage> mask)
 {
     auto rgba = image->GetChannel<V4f>("rgba");
-    auto id = image->GetChannel<uint32_t>(sharedConfig.idChannel);
+    auto id = image->GetChannel<uint32_t>(sharedConfig.GetIdChannel(image->header));
     auto Z = image->GetChannel<float>("Z");
 
     // Find closest sample (for our object ID) to the camera for each point.
@@ -183,7 +183,7 @@ void DeepImageStroke::ApplyStrokeUsingMask(const DeepImageStroke::Config &config
             outputImage->AddSample(x, y);
 
             auto rgbaOut = outputImage->GetChannel<V4f>("rgba");
-            auto idOut = outputImage->GetChannel<uint32_t>(sharedConfig.idChannel);
+            auto idOut = outputImage->GetChannel<uint32_t>(sharedConfig.GetIdChannel(image->header));
             auto ZBackOut = outputImage->GetChannel<float>("ZBack");
             auto ZOut = outputImage->GetChannel<float>("Z");
 
@@ -269,7 +269,7 @@ shared_ptr<SimpleImage> DeepImageStroke::CreateIntersectionPattern(
     shared_ptr<SimpleImage> pattern = make_shared<SimpleImage>(image->width, image->height);
 
     // Create a mask using simple edge detection.
-    auto id = image->GetChannel<uint32_t>(sharedConfig.idChannel);
+    auto id = image->GetChannel<uint32_t>(sharedConfig.GetIdChannel(image->header));
     auto Z = image->GetChannel<float>("Z");
     auto A = image->GetAlphaChannel();
 
@@ -483,7 +483,7 @@ void EXROperation_Stroke::AddStroke(const DeepImageStroke::Config &config, share
     shared_ptr<SimpleImage> strokeMask;
     if(config.strokeOutline)
         strokeMask = DeepImageUtil::CollapseEXR(image,
-            image->GetChannel<uint32_t>(sharedConfig.idChannel),
+            image->GetChannel<uint32_t>(sharedConfig.GetIdChannel(image->header)),
             image->GetChannel<V4f>("rgba"),
             strokeVisibilityMask, config.objectIds,
             DeepImageUtil::CollapseMode_Visibility);
@@ -590,7 +590,7 @@ EXROperation_Stroke::EXROperation_Stroke(const SharedConfig &sharedConfig_, stri
 
 void EXROperation_Stroke::AddChannels(shared_ptr<DeepImage> image, DeepFrameBuffer &frameBuffer) const
 {
-    image->AddChannelToFramebuffer<uint32_t>(sharedConfig.idChannel, frameBuffer);
+    image->AddChannelToFramebuffer<uint32_t>(sharedConfig.GetIdChannel(image->header), frameBuffer);
 
     if(strokeDesc.strokeIntersections)
     {

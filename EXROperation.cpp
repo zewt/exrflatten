@@ -2,6 +2,8 @@
 #include "DeepImage.h"
 #include "DeepImageUtil.h"
 
+#include <OpenEXR/ImfChannelList.h>
+
 bool SharedConfig::ParseOption(string opt, string value)
 {
     if(opt == "input")
@@ -31,11 +33,23 @@ bool SharedConfig::ParseOption(string opt, string value)
     else if(opt == "id")
     {
         // Change the name of the layer used for IDs.
-        idChannel = value;
+        explicitIdChannel = value;
         return true;
     }
 
     return false;
+}
+
+string SharedConfig::GetIdChannel(const Imf::Header &header) const
+{
+    if(!explicitIdChannel.empty())
+        return explicitIdChannel;
+
+    // If no ID channel was specified explicitly with --id, search for both "ID" and "id".
+    if(header.channels().findChannel("id") != NULL)
+        return "id";
+    else
+        return "ID";
 }
 
 shared_ptr<DeepImage> EXROperationState::GetOutputImage()

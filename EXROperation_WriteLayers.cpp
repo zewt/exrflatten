@@ -89,7 +89,7 @@ void EXROperation_WriteLayers::AddChannels(shared_ptr<DeepImage> image, DeepFram
         }
     }
 
-    image->AddChannelToFramebuffer<uint32_t>(sharedConfig.idChannel, frameBuffer);
+    image->AddChannelToFramebuffer<uint32_t>(sharedConfig.GetIdChannel(image->header), frameBuffer);
 }
 
 void EXROperation_WriteLayers::Run(shared_ptr<EXROperationState> state) const
@@ -124,7 +124,7 @@ void EXROperation_WriteLayers::Run(shared_ptr<EXROperationState> state) const
     }
 
     // Combine layers.  This just changes the object IDs of samples, so we don't need to re-sort.
-    shared_ptr<TypedDeepImageChannel<uint32_t>> collapsedId(image->GetChannel<uint32_t>(sharedConfig.idChannel)->Clone());
+    shared_ptr<TypedDeepImageChannel<uint32_t>> collapsedId(image->GetChannel<uint32_t>(sharedConfig.GetIdChannel(image->header))->Clone());
     for(auto combine: combines)
         DeepImageUtil::CombineObjectId(collapsedId, combine.second, combine.first);
 
