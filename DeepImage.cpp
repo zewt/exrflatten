@@ -279,7 +279,7 @@ shared_ptr<DeepImage> DeepImageReader::Open(string filename)
         auto tempFile = make_shared<InputFile>(filename.c_str());
         int fileVersion = tempFile->version();
         if((fileVersion & 0x800) == 0)
-            StringException("Input file is not a deep EXR.");
+            throw StringException("Input file is not a deep EXR.");
     }
 
     file = make_shared<DeepScanLineInputFile>(filename.c_str());
