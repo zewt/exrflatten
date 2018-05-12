@@ -94,6 +94,38 @@ void SimpleImage::SRGBToLinear()
     }
 }
 
+void SimpleImage::Premultiply()
+{
+    for(int y = 0; y < height; y++)
+    {
+        for(int x = 0; x < width; ++x)
+        {
+            V4f &value = GetRGBA(x, y);
+
+            value.x *= value.w;
+            value.y *= value.w;
+            value.z *= value.w;
+        }
+    }
+}
+
+void SimpleImage::Unpremultiply()
+{
+    for(int y = 0; y < height; y++)
+    {
+        for(int x = 0; x < width; ++x)
+        {
+            V4f &value = GetRGBA(x, y);
+            if(value.w < 0.00001f)
+                continue;
+
+            value.x /= value.w;
+            value.y /= value.w;
+            value.z /= value.w;
+        }
+    }
+}
+
 void SimpleImage::TransformNormalMap(M44f matrix)
 {
     for(int y = 0; y < height; y++)

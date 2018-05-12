@@ -38,6 +38,9 @@ public:
     void LinearToSRGB();
     void SRGBToLinear();
 
+    void Premultiply();
+    void Unpremultiply();
+
     // Transform a normal map by a matrix.  The 4th channel (w) will be left unchanged.
     void TransformNormalMap(Imath::M44f matrix);
 
