@@ -156,6 +156,16 @@ public:
 
     // The default value for this channel when adding new samples with AddSample.
     T defaultValue = T();
+
+private:
+    // All samples in the storage, excluding samples added by addSample.
+    vector<T> sampleStorage;
+
+    // Return true if p is inside sampleStorage.
+    bool IsSampleInSharedStorage(const T *p) const
+    {
+        return p >= sampleStorage.data() && p < sampleStorage.data() + sampleStorage.size();
+    }
 };
 
 // This is a read-only proxy, to allow reading a single component of a vector as if it's

@@ -54,10 +54,36 @@ TypedDeepImageChannel<T>::TypedDeepImageChannel(int width_, int height_, const A
     defaultValue = T();
     data.resizeErase(height, width);
 
+    // Find the total number of samples in the image.
+    int totalSamples = 0;
+    for(int y = 0; y < data.height(); y++)
+        for(int x = 0; x < data.width(); x++)
+            totalSamples += sampleCount[y][x];
+
+    // Allocate storage for samples.
+    sampleStorage.resize(totalSamples);
+    T *nextSample = sampleStorage.data();
+
+    // Store pointers for each pixel's samples.
     for(int y = 0; y < data.height(); y++)
     {
         for(int x = 0; x < data.width(); x++)
-            data[y][x] = new T[sampleCount[y][x]];
+        {
+            // If this pixel has no samples at all, point it at the beginning of the
+            // array.  The EXR library won't write to it, but we need the pointer to
+            // lie within sampleStorage so we can tell that it wasn't allocated separately,
+            // and if we just use nextSample and there are empty pixels at the very end
+            // of the image, nextSample will be outside of sampleStorage.
+            int count = sampleCount[y][x];
+            if(count == 0)
+            {
+                data[y][x] = sampleStorage.data();
+                continue;
+            }
+
+            data[y][x] = nextSample;
+            nextSample += count;
+        }
     }
 }
 
@@ -100,10 +126,18 @@ void TypedDeepImageChannel<T>::CopySamples(shared_ptr<const DeepImageChannel> Ot
 template<typename T>
 TypedDeepImageChannel<T>::~TypedDeepImageChannel()
 {
+    // Deallocate samples that were added with AddSample.  Be sure not to try to deallocate
+    // pointers inside sampleStorage.
     for(int y = 0; y < data.height(); y++)
     {
         for(int x = 0; x < data.width(); x++)
-            delete[] data[y][x];
+        {
+            T *p = data[y][x];
+            if(IsSampleInSharedStorage(p))
+                continue;
+
+            delete[] p;
+        }
     }
 }
 
@@ -120,7 +154,10 @@ void TypedDeepImageChannel<T>::AddSample(int x, int y, int count)
     T *newArray = new T[count];
     memcpy(newArray, data[y][x], sizeof(T) * (count-1));
     newArray[count-1] = defaultValue;
-    delete[] data[y][x];
+    // Only deallocate the old pointer if it was allocated separately by another call to
+    // AddSample.  Don't try to deallocate pointers inside sampleStorage.
+    if(!IsSampleInSharedStorage(data[y][x]))
+        delete[] data[y][x];
     data[y][x] = newArray;
 }
 
