@@ -51,6 +51,14 @@ void split(const string &source, const string &delimitor, vector<string> &result
 float LinearToSRGB(float value);
 float SRGBToLinear(float value);
 
+// Convert a 0-1 float to a 0-255 int.  The value must already be clamped.
+inline uint8_t FloatToInt(float f)
+{
+    union { float f; uint32_t i; } u;
+    u.f = 32768.0f + f * (255.0f / 256.0f);
+    return (uint8_t) u.i;
+}
+
 template<typename T>
 T clamp(T value, T low, T high)
 {

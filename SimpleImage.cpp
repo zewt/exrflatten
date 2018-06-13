@@ -209,7 +209,8 @@ namespace {
                     }
 
                     // 32-bit -> 8-bit:
-                    uint8_t output = (uint8_t) min(max(lrintf(value * 255.0f), 0L), 255L);
+                    value = min(max(value, 0.0f), 1.0f);
+                    uint8_t output = FloatToInt(value);
                     row[x*4+c] = output;
                 }
             }
