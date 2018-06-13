@@ -185,6 +185,7 @@ namespace {
         );
         // XXX compression level for both png and exr
         png_set_compression_level(png, Z_NO_COMPRESSION);
+        png_set_filter(png, 0, PNG_NO_FILTERS);
         png_write_info(png, info);
 
         // Interleave the channels and output the data.
